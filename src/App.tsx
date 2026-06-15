@@ -597,20 +597,7 @@ export default function App() {
         }
       }
     }
-  }, [proyectosList, llamadosList, config.selectedLlamadoId]);
-
-  // Auto-select single llamado: if a proyecto has exactly one llamado, preselect it
-  useEffect(() => {
-    if (!proyecto) return;
-    const related = llamadosList.filter(l => l.proyecto_id === proyecto.id);
-    if (related.length === 1) {
-      const only = related[0];
-      if (only && config.selectedLlamadoId !== only.id) {
-        setLlamado(only);
-        setConfig(prev => ({ ...prev, selectedLlamadoId: only.id }));
-      }
-    }
-  }, [proyecto, llamadosList, config.selectedLlamadoId]);
+  }, [proyectosList, llamadosList]);
 
   // Execute silent background uploads if Online
   useEffect(() => {
