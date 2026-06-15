@@ -1,34 +1,16 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Wifi,
-  WifiOff,
   CheckCircle,
-  Plus,
-  Trash2,
-  Image as ImageIcon,
-  Save,
-  Info,
-  Layers,
   ChevronLeft,
   ChevronRight,
-  ChevronUp,
-  ChevronDown,
-  X,
-  RefreshCw,
   AlertCircle,
   Clock,
-  Eye,
-  Database,
-  Settings,
-  Pencil,
-  GripVertical
 } from "lucide-react";
 import { PdrRow, AppConfig, OfflineSyncAction, Shotlist, Proyecto, Llamado } from "./types";
 
 // Fallback dynamic configurations
 const DEFAULT_SUPABASE_URL = "https://mvmlwelmilhitoetessx.supabase.co";
 const DEFAULT_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im12bWx3ZWxtaWxoaXRvZXRlc3N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5NTYxOTksImV4cCI6MjA5NjUzMjE5OX0.1MIsmOLAZM31b1BsysxII88U6JzOQWMp5kNDRiFmCnc";
-
 
 export default function App() {
   // Configuration for SQLite-Supabase simulation
@@ -56,8 +38,7 @@ export default function App() {
   const [networkOnline, setNetworkOnline] = useState(navigator.onLine);
 
   // Core Data
-  const [proyecto, setProyecto] = useState<Proyecto>(MOCK_PROYECTO);
-  const [llamado, setLlamado] = useState<Llamado>(MOCK_LLAMADO);
+
 
   const [proyectosList, setProyectosList] = useState<Proyecto[]>(() => {
     const cached = localStorage.getItem("rodajeAPP_v2_cache_all_proyectos");
@@ -72,7 +53,6 @@ export default function App() {
     if (cached) {
       try { return JSON.parse(cached); } catch (e) { /* ignore */ }
     }
-    return Object.values(MOCK_LLAMADOS_BY_PROJECT);
   });
   const [pdrRows, setPdrRows] = useState<PdrRow[]>([]);
   const [localCompletedTimes, setLocalCompletedTimes] = useState<Record<number, string>>({});
@@ -253,14 +233,6 @@ export default function App() {
       }
     } else {
       // Load initially ready robust mockups matching the selected id
-      const pId = cacheKeySuffix === 51 ? 2 : cacheKeySuffix === 63 ? 3 : 1;
-      const proj = PROYECTOS_DISPONIBLES.find(p => p.id === pId) || MOCK_PROYECTO;
-      const llam = MOCK_LLAMADOS_BY_PROJECT[pId] || MOCK_LLAMADO;
-      const rows = MOCK_PDR_BY_PROJECT[pId] || INITIAL_MOCK_PDR;
-
-      setProyecto(proj);
-      setLlamado(llam);
-      setPdrRows(rows);
     }
 
     // Attempt silent background fetch if Online helper is set
@@ -318,7 +290,6 @@ export default function App() {
           const data = await res.json();
           if (data && data.length > 0) {
             const activeLlamado = data[0];
-            let activeProyecto = activeLlamado.proyectos || MOCK_PROYECTO;
             if (!activeLlamado.proyectos) {
               const foundProj = proyectosList.find(p => p.id === activeLlamado.proyecto_id);
               if (foundProj) {
@@ -396,7 +367,6 @@ export default function App() {
           }
         } else {
           const fallbackLlamId = pId === 2 ? 51 : pId === 3 ? 63 : 42;
-          const fallbackLlam = llamadosList.find(l => l.id === fallbackLlamId) || MOCK_LLAMADO;
           setLlamado(fallbackLlam);
           setConfig(prev => ({ ...prev, selectedLlamadoId: fallbackLlamId }));
         }
