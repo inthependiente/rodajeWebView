@@ -599,6 +599,19 @@ export default function App() {
     }
   }, [proyectosList, llamadosList, config.selectedLlamadoId]);
 
+  // Auto-select single llamado: if a proyecto has exactly one llamado, preselect it
+  useEffect(() => {
+    if (!proyecto) return;
+    const related = llamadosList.filter(l => l.proyecto_id === proyecto.id);
+    if (related.length === 1) {
+      const only = related[0];
+      if (only && config.selectedLlamadoId !== only.id) {
+        setLlamado(only);
+        setConfig(prev => ({ ...prev, selectedLlamadoId: only.id }));
+      }
+    }
+  }, [proyecto, llamadosList, config.selectedLlamadoId]);
+
   // Execute silent background uploads if Online
   useEffect(() => {
     if (config.mode === "online" && networkOnline && offlineQueue.length > 0) {
@@ -1370,35 +1383,48 @@ export default function App() {
           {/* Selector de Llamados */}
           <div className="space-y-4">
             <div className="w-full text-left space-y-1.5">
-              <label className="text-[10px] text-indigo-450 font-bold uppercase tracking-wider block font-mono">
-                Seleccionar Llamado:
-              </label>
-              <select
-                value={llamado.id}
-                onChange={(e) => {
-                  const lId = parseInt(e.target.value, 10);
-                  const selectedLlam = llamadosList.find(l => l.id === lId) || llamado;
-                  setLlamado(selectedLlam);
-                  setConfig(prev => ({ ...prev, selectedLlamadoId: lId }));
-                }}
-                className="bg-slate-950 border border-slate-850/80 text-amber-400 text-sm font-bold rounded-xl px-4 py-3 w-full focus:border-indigo-500 focus:outline-none cursor-pointer font-mono shadow-inner"
-              >
-                {(() => {
-                  const relatedLlamados = llamadosList.filter(l => l.proyecto_id === proyecto.id);
-                  if (relatedLlamados.length === 0) {
-                    return (
-                      <option value={llamado.id} className="bg-slate-950 text-amber-400">
-                        {llamado.d_o_d || `Llamado ${llamado.id}`}
-                      </option>
-                    );
-                  }
-                  return relatedLlamados.map((l) => (
-                    <option key={l.id} value={l.id} className="bg-slate-955 text-amber-400">
-                      {l.d_o_d || `Llamado ${l.id}`}
-                    </option>
-                  ));
-                })()}
-              </select>
+    {(() => {
+                const relatedLlamados = llamadosList.filter(l => l.proyecto_id === proyecto.id);
+                if (relatedLlamados.length <= 1) {
+                  const single = relatedLlamados[0] || llamado;
+                  return (
+                    <div>
+                      <label className="text-[10px] text-indigo-450 font-bold uppercase tracking-wider block font-mono">Llamado:</label>
+                      <div className="bg-slate-950 border border-slate-850/80 text-amber-400 text-sm font-bold rounded-xl px-4 py-3 w-full font-mono">
+                        {single?.d_o_d || `Llamado ${single?.id}`}
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div>
+                    <label className="text-[10px] text-indigo-450 font-bold uppercase tracking-wider block font-mono">Seleccionar Llamado:</label>
+                    <select
+                      value={llamado.id}
+                      onChange={(e) => {
+                        const lId = parseInt(e.target.value, 10);
+                        const selectedLlam = llamadosList.find(l => l.id === lId) || llamado;
+                        setLlamado(selectedLlam);
+                        setConfig(prev => ({ ...prev, selectedLlamadoId: lId }));
+                      }}
+                      className="bg-slate-950 border border-slate-850/80 text-amber-400 text-sm font-bold rounded-xl px-4 py-3 w-full focus:border-indigo-500 focus:outline-none cursor-pointer font-mono shadow-inner"
+                    >
+                      {relatedLlamados.length === 0 ? (
+                        <option value={llamado.id} className="bg-slate-950 text-amber-400">
+                          {llamado.d_o_d || `Llamado ${llamado.id}`}
+                        </option>
+                      ) : (
+                        relatedLlamados.map((l) => (
+                          <option key={l.id} value={l.id} className="bg-slate-955 text-amber-400">
+                            {l.d_o_d || `Llamado ${l.id}`}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Informacion de Resumen del Llamado */}
