@@ -1,0 +1,6 @@
+{
+  "name": "Rodaje WebView",
+  "description": "Página de control y monitoreo de planes de rodaje en tiempo real.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
