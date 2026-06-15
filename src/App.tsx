@@ -441,6 +441,11 @@ export default function App() {
           } else {
             return { text: `CONCLUIDO: ${formattedDate}`, class: "bg-slate-900/90 border-slate-800 text-slate-400 font-medium" };
           }
+        } else {
+          if (clockMinutes < baseLlamadoMinutes) {
+            const timeStr = llamado.llamado_hora || "08:00";
+            return { text: `PROGRAMADO: ${formattedDate} - ${timeStr}`, class: "bg-indigo-950/80 border-indigo-500 text-indigo-400 font-bold" };
+          }
         }
       } catch (err) {
         console.error("Error comparing dates", err);
