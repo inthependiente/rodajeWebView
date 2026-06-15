@@ -1386,7 +1386,7 @@ export default function App() {
 
                 return (
                   <div>
-                    <label className="text-[10px] text-indigo-450 font-bold uppercase tracking-wider block font-mono">Seleccionar Llamado:</label>
+                    <label className="text-[10px] text-indigo-450 font-bold uppercase tracking-wider block font-mono">Seleccionar Día:</label>
                     <select
                       value={llamado.id}
                       onChange={(e) => {
