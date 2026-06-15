@@ -8,10 +8,9 @@ import {
   X,
   Clock,
   Eye,
-  Database,
-  EyeOff
+  Database
 } from "lucide-react";
-import { PdrRow, AppConfig, Shotlist, Proyecto, Llamado } from "./types";
+import { PdrRow, AppConfig, Proyecto, Llamado } from "./types";
 
 // Fallback dynamic configurations
 const DEFAULT_SUPABASE_URL = "https://mvmlwelmilhitoetessx.supabase.co";
@@ -41,7 +40,6 @@ export default function App() {
   const [tempLlamadoId, setTempLlamadoId] = useState(String(config.selectedLlamadoId || "44"));
 
   const [loading, setLoading] = useState(false);
-  const [logMessage, setLogMessage] = useState<string | null>(null);
   const [networkOnline, setNetworkOnline] = useState(navigator.onLine);
 
   // Core Data
@@ -138,7 +136,6 @@ export default function App() {
 
   const loadCachedOrFetch = useCallback(async () => {
     setLoading(true);
-    setLogMessage(null);
 
     const cachedProyecto = localStorage.getItem(`rodajeAPP_v2_cache_proyecto_${cacheKeySuffix}`);
     const cachedLlamado = localStorage.getItem(`rodajeAPP_v2_cache_llamado_${cacheKeySuffix}`);
@@ -153,7 +150,6 @@ export default function App() {
         if (cachedCompTimes) {
           setLocalCompletedTimes(JSON.parse(cachedCompTimes));
         }
-        setLogMessage("Plan cargado localmente.");
       } catch (e) {
         console.error("Cache parsing error", e);
       }
@@ -227,13 +223,13 @@ export default function App() {
                 shotlist_id: p.shotlist_id,
                 terminado: !!p.status,
                 shotlist: {
-                  id: p.shotlist?.id || Math.floor(Math.random() * 100000),
-                  esc: p.shotlist?.esc || "12",
-                  plano: p.shotlist?.plano || "1",
-                  descripcion: p.shotlist?.descripcion || "Plano sin descripción",
-                  cast_nombres: p.shotlist?.cast_nombres || "",
-                  notas: p.shotlist?.notes || p.shotlist?.notas || "",
-                  referencia_urls: p.shotlist?.referencia_urls || ""
+                  id: p.shotlist?.id ?? p.shotlist_id ?? 0,
+                  esc: p.shotlist?.esc ?? "",
+                  plano: p.shotlist?.plano ?? "",
+                  descripcion: p.shotlist?.descripcion ?? "",
+                  cast_nombres: p.shotlist?.cast_nombres ?? "",
+                  notas: p.shotlist?.notes ?? p.shotlist?.notas ?? "",
+                  referencia_urls: p.shotlist?.referencia_urls ?? ""
                 }
               }));
               setPdrRows(parsed);
@@ -250,8 +246,6 @@ export default function App() {
                 }
               });
               setLocalCompletedTimes(mappedTimes);
-
-              setLogMessage("Sincronización silenciosa completada.");
 
               // Save to cache
               if (activeProyecto) {
@@ -671,7 +665,6 @@ export default function App() {
                           selectedLlamadoId: cleanId,
                           mode: "online"
                         });
-                        setLogMessage("Conectando con base de datos en vivo...");
                         setShowSupabaseSettings(false);
                       }
                     }}
@@ -973,7 +966,7 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="flex flex-col items-center justify-center py-0.5 text-amber-300 bg-amber-950/5 rounded-lg">
+                        <div className="flex flex-col items-center justify-center py-0.5 text-amber-300 bg-amber-955/5 rounded-lg">
                           <span className="text-[9px] text-amber-500 font-bold uppercase tracking-wider mb-0.5 text-center">ESTIMADO</span>
                           <div className="flex items-center gap-1 flex-wrap justify-center">
                             <span className="text-[14px] font-black text-amber-450">{estTimes.estimadaStartStr}</span>
