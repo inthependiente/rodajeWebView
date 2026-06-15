@@ -29,201 +29,6 @@ import { PdrRow, AppConfig, OfflineSyncAction, Shotlist, Proyecto, Llamado } fro
 const DEFAULT_SUPABASE_URL = "https://mvmlwelmilhitoetessx.supabase.co";
 const DEFAULT_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im12bWx3ZWxtaWxoaXRvZXRlc3N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5NTYxOTksImV4cCI6MjA5NjUzMjE5OX0.1MIsmOLAZM31b1BsysxII88U6JzOQWMp5kNDRiFmCnc";
 
-const PROYECTOS_DISPONIBLES: Proyecto[] = [
-  {
-    id: 1,
-    productora: "Gecko Films",
-    campana: "Aventura Salvaje 2026",
-    direccion_productora: "Santa Cruz, Bolivia",
-    logo_productora: "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?q=80&w=200&auto=format&fit=crop",
-    cliente: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=200&auto=format&fit=crop",
-    color_cliente: "#561d68",
-    color_campana: "#14cbb5"
-  },
-  {
-    id: 2,
-    productora: "CinemArt Studio",
-    campana: "Fragancia del Otoño",
-    direccion_productora: "La Paz, Bolivia",
-    logo_productora: "https://images.unsplash.com/photo-1485846234645-a62644f84728?q=80&w=200&auto=format&fit=crop",
-    cliente: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=200&auto=format&fit=crop",
-    color_cliente: "#3b82f6",
-    color_campana: "#f59e0b"
-  },
-  {
-    id: 3,
-    productora: "Red Line Films",
-    campana: "Sabor Urbano Pepsi",
-    direccion_productora: "Cochabamba, Bolivia",
-    logo_productora: "https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?q=80&w=200&auto=format&fit=crop",
-    cliente: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=200&auto=format&fit=crop",
-    color_cliente: "#ef4444",
-    color_campana: "#10b981"
-  }
-];
-
-const MOCK_PROYECTO = PROYECTOS_DISPONIBLES[0];
-
-const MOCK_LLAMADOS_BY_PROJECT: Record<number, Llamado> = {
-  1: {
-    id: 42,
-    proyecto_id: 1,
-    d_o_d: "DÍA 1 DE 3",
-    fecha: "2026-06-12",
-    llamado_hora: "08:00",
-    desayuno: "07:30",
-    almuerzo: "13:30",
-    cena: "20:00",
-    notas: "Llevar ropa abrigada para Ext. Noche."
-  },
-  2: {
-    id: 51,
-    proyecto_id: 2,
-    d_o_d: "DÍA 2 DE 5",
-    fecha: "2026-06-13",
-    llamado_hora: "07:00",
-    desayuno: "06:30",
-    almuerzo: "12:30",
-    cena: "19:30",
-    notas: "Cámara en trípode bajo condiciones de bosque húmedo."
-  },
-  3: {
-    id: 63,
-    proyecto_id: 3,
-    d_o_d: "DÍA 1 DE 1",
-    fecha: "2026-06-14",
-    llamado_hora: "09:00",
-    desayuno: "08:15",
-    almuerzo: "14:00",
-    cena: "21:00",
-    notas: "Rodaje con atletas urbanos de skate nocturno."
-  }
-};
-
-const MOCK_LLAMADO = MOCK_LLAMADOS_BY_PROJECT[1];
-
-const INITIAL_MOCK_PDR: PdrRow[] = [
-  {
-    id: 1001,
-    orden: 1,
-    duracion_min: 25,
-    llamado_id: 42,
-    shotlist_id: 201,
-    terminado: false,
-    shotlist: {
-      id: 201,
-      esc: "12",
-      plano: "1",
-      descripcion: "General de situación. Entrada de camioneta roja en locación.",
-      notas: "Usar dron para planos aéreos si el viento lo permite.",
-      referencia_urls: "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?q=80&w=600&auto=format&fit=crop"
-    }
-  },
-  {
-    id: 1002,
-    orden: 2,
-    duracion_min: 15,
-    llamado_id: 42,
-    shotlist_id: 202,
-    terminado: false,
-    shotlist: {
-      id: 202,
-      esc: "12",
-      plano: "2",
-      descripcion: "Primer plano de Gabriel con rostro preocupado mirando atrás.",
-      notas: "Focalizar ojos. Control de reflejos del viento.",
-      referencia_urls: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop"
-    }
-  },
-  {
-    id: 1003,
-    orden: 3,
-    duracion_min: 30,
-    llamado_id: 42,
-    shotlist_id: 203,
-    terminado: false,
-    shotlist: {
-      id: 203,
-      esc: "12",
-      plano: "3",
-      descripcion: "Detalle del tablero de control de la camioneta marcando falla.",
-      notas: "Lente macro y luz indirecta suave.",
-      referencia_urls: "https://images.unsplash.com/photo-1485291571150-772bcfc10da5?q=80&w=600&auto=format&fit=crop"
-    }
-  },
-  {
-    id: 1004,
-    orden: 4,
-    duracion_min: 20,
-    llamado_id: 42,
-    shotlist_id: 204,
-    terminado: false,
-    shotlist: {
-      id: 204,
-      esc: "14",
-      plano: "1",
-      descripcion: "Plano medio. Gabriel baja del camión con equipamiento de rodaje.",
-      notas: "Cuidar continuidad de sombreado.",
-      referencia_urls: "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?q=80&w=600&auto=format&fit=crop"
-    }
-  }
-];
-
-const MOCK_PDR_BY_PROJECT: Record<number, PdrRow[]> = {
-  1: INITIAL_MOCK_PDR,
-  2: [
-    {
-      id: 2001,
-      orden: 1,
-      duracion_min: 35,
-      llamado_id: 51,
-      shotlist_id: 205,
-      terminado: false,
-      shotlist: {
-        id: 205,
-        esc: "14",
-        plano: "2",
-        descripcion: "Contraplano de la asistente entregando el monitor portátil.",
-        notas: "Luz de tarde cálida. Rebote plateado.",
-        referencia_urls: "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?q=80&w=600&auto=format&fit=crop"
-      }
-    },
-    {
-      id: 2002,
-      orden: 2,
-      duracion_min: 20,
-      llamado_id: 51,
-      shotlist_id: 206,
-      terminado: false,
-      shotlist: {
-        id: 206,
-        esc: "15",
-        plano: "1",
-        descripcion: "Detalle de mano encendiendo la fogata en el refugio de montaña.",
-        notas: "Efecto de chispas en cámara lenta.",
-        referencia_urls: "https://images.unsplash.com/photo-1478147427282-58a87a120781?q=80&w=600&auto=format&fit=crop"
-      }
-    }
-  ],
-  3: [
-    {
-      id: 3001,
-      orden: 1,
-      duracion_min: 40,
-      llamado_id: 63,
-      shotlist_id: 207,
-      terminado: false,
-      shotlist: {
-        id: 207,
-        esc: "21",
-        plano: "1",
-        descripcion: "Gran plano general de la pista de patinaje con luces neon.",
-        notas: "Usar lente gran angular.",
-        referencia_urls: "https://images.unsplash.com/photo-1542204172-e7052809a850?q=80&w=600&auto=format&fit=crop"
-      }
-    }
-  ]
-};
 
 export default function App() {
   // Configuration for SQLite-Supabase simulation
@@ -1240,6 +1045,15 @@ export default function App() {
             return { text: `PROGRAMADO: ${formattedDate}`, class: "bg-indigo-950/80 border-indigo-500 text-indigo-400 font-bold" };
           } else {
             return { text: `CONCLUIDO: ${formattedDate}`, class: "bg-slate-900/90 border-slate-800 text-slate-400 font-medium" };
+          }
+        }
+
+        // La fecha es HOY — verificar si la hora de llamado aún no ha llegado
+        if (llamado.llamado_hora) {
+          const llamadoMinutes = parseTimeToMinutes(llamado.llamado_hora);
+          if (clockMinutes < llamadoMinutes) {
+            const horaFormateada = llamado.llamado_hora.substring(0, 5); // "HH:MM"
+            return { text: `PROGRAMADO: ${formattedDate} ${horaFormateada}`, class: "bg-indigo-950/80 border-indigo-500 text-indigo-400 font-bold" };
           }
         }
       } catch (err) {
