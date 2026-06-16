@@ -1,9 +1,10 @@
-name: Deploy to GitHub Pages
+name: Deploy Static App
 
 on:
   push:
     branches:
-      - main # O el nombre de tu rama principal
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -11,8 +12,11 @@ permissions:
   id-token: write
 
 concurrency:
-  group: 'pages'
+  group: "pages"
   cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   deploy:
@@ -21,31 +25,35 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-cache: 'npm'
-          node-version: 20
+          node-version: 24
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Application
+      - name: Build application
         run: npm run build
 
       - name: Setup Pages
-        uses: actions/configure-pages@v4
+        uses: actions/configure-pages@v5
 
-      - name: Upload Artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          # Indicamos la carpeta de salida que contiene el index.html final.
-          # (Asegúrate de que coincida con 'outDir' en tu vite.config.js/docs)
+          name: github-pages
+          # Directing to 'docs' or 'dist' based on Vite config, 
+          # but typically 'dist' or 'docs' is standard. 
+          # Since our README/list says "docs" exists with index.html, we target 'docs'.
           path: './docs'
 
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        env:
+          ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: "false"
