@@ -227,7 +227,7 @@ export default function App() {
             }
 
             // Fetch Plan de Rodaje (pdr) list matching SQLite-Supabase tables schema
-            const pdrUrl = `${config.supabaseUrl}/rest/v1/pdr?llamado_id=eq.${cacheKeySuffix}&select=id,orden,duracion_min,status,shotlist_id,shotlist(id,esc,plano,descripcion,cast_nombres,notas,referencia_urls)&order=orden.asc`;
+            const pdrUrl = `${config.supabaseUrl}/rest/v1/pdr?llamado_id=eq.${cacheKeySuffix}&select=id,orden,duracion_min,status,inicio_reg,shotlist_id,shotlist(id,esc,plano,descripcion,cast_nombres,notas,referencia_urls)&order=orden.asc`;
             const pdrRes = await fetch(pdrUrl, { headers });
             if (pdrRes.ok) {
               const pdrData = await pdrRes.json();
@@ -238,6 +238,7 @@ export default function App() {
                 llamado_id: cacheKeySuffix,
                 shotlist_id: p.shotlist_id,
                 terminado: !!p.status,
+                inicio_reg: p.inicio_reg,
                 shotlist: {
                   id: p.shotlist?.id ?? p.shotlist_id ?? 0,
                   esc: p.shotlist?.esc ?? "",
@@ -352,8 +353,8 @@ export default function App() {
       let estEndStr = "";
       let completedTimeStr: string | null = null;
       
-      if (row.terminado && (derivedCompletedTimes[row.id] || localCompletedTimes[row.id])) {
-        const lockedStr = derivedCompletedTimes[row.id] || localCompletedTimes[row.id];
+      if (row.terminado && (row.inicio_reg || derivedCompletedTimes[row.id] || localCompletedTimes[row.id])) {
+        const lockedStr = row.inicio_reg || derivedCompletedTimes[row.id] || localCompletedTimes[row.id];
         completedTimeStr = lockedStr;
         estStartStr = lockedStr;
         estEndStr = lockedStr;
@@ -378,10 +379,10 @@ export default function App() {
 
       // Real Duration (only if completed)
       let durationReal = 0;
-      if (row.terminado && (derivedCompletedTimes[row.id] || localCompletedTimes[row.id])) {
-        const matchedEnd = derivedCompletedTimes[row.id] || localCompletedTimes[row.id];
+      if (row.terminado && (row.inicio_reg || derivedCompletedTimes[row.id] || localCompletedTimes[row.id])) {
+        const matchedEnd = row.inicio_reg || derivedCompletedTimes[row.id] || localCompletedTimes[row.id];
         const prevMatchedEnd = idx > 0 && pdrRows[idx - 1]?.terminado 
-          ? (derivedCompletedTimes[pdrRows[idx - 1].id] || localCompletedTimes[pdrRows[idx - 1].id])
+          ? (pdrRows[idx - 1].inicio_reg || derivedCompletedTimes[pdrRows[idx - 1].id] || localCompletedTimes[pdrRows[idx - 1].id])
           : null;
         const startMin = idx === 0
           ? baseMin
