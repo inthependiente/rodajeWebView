@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   ChevronLeft,
-  Clock
+  Clock,
+  HelpCircle,
+  X
 } from "lucide-react";
 import { PdrRow, AppConfig, Proyecto, Llamado } from "./types";
 import LaunchScreen from "./components/LaunchScreen";
@@ -63,6 +65,7 @@ export default function App() {
 
   // Reference visualizer scrollable modal
   const [activeRefImage, setActiveRefImage] = useState<string | null>(null);
+  const [showBetaModal, setShowBetaModal] = useState(false);
   const [imageGallery, setImageGallery] = useState<string[]>([]);
   const [galleryIndex, setGalleryIndex] = useState(0);
 
@@ -331,55 +334,61 @@ export default function App() {
     });
 
     // 2. Precalculate estimated timings, real durations, and references
-    let runningEstEnd = baseMin;
+    let runningEstEndMin = baseMin;
+
+    const parseTimeToMinutesEx = (timeStr: string | null | undefined, defaultMin: number): number => {
+      if (!timeStr) return defaultMin;
+      let s = timeStr;
+      if (s.includes("T")) {
+        try {
+          const parts = s.split("T");
+          if (parts[1]) {
+            s = parts[1];
+          }
+        } catch (_) {}
+      }
+      if (s.includes(":")) {
+        const parts = s.split(":");
+        if (parts.length >= 2) {
+          const h = parseInt(parts[0], 10);
+          const m = parseInt(parts[1], 10);
+          if (!isNaN(h) && !isNaN(m)) {
+            return h * 60 + m;
+          }
+        }
+      }
+      return defaultMin;
+    };
+
     return pdrRows.map((row, idx) => {
       const planTimes = rawPlan[idx] || { startMin: baseMin, endMin: baseMin + row.duracion_min, plannedStartStr: "08:00", plannedEndStr: "08:15" };
       
-      let origStartMin: number;
+      let estStartMin: number;
       if (idx === 0) {
-        origStartMin = baseMin;
+        estStartMin = baseMin;
       } else {
         const prevRow = pdrRows[idx - 1];
-        if (prevRow.terminado && (derivedCompletedTimes[prevRow.id] || localCompletedTimes[prevRow.id])) {
-          origStartMin = parseTimeToMinutes(derivedCompletedTimes[prevRow.id] || localCompletedTimes[prevRow.id]);
+        if (prevRow.terminado) {
+          estStartMin = parseTimeToMinutesEx(prevRow.inicio_reg, runningEstEndMin);
         } else {
-          origStartMin = runningEstEnd;
+          estStartMin = runningEstEndMin;
         }
       }
       
-      runningEstEnd = origStartMin + row.duracion_min;
+      const estEndMin = estStartMin + row.duracion_min;
+      runningEstEndMin = estEndMin;
       
-      let estStartStr = "";
-      let estEndStr = "";
+      const estStartStr = formatMinutesToTime(estStartMin);
+      const estEndStr = formatMinutesToTime(estEndMin);
+      
       let completedTimeStr: string | null = null;
-      
-      if (row.terminado && (row.inicio_reg || derivedCompletedTimes[row.id] || localCompletedTimes[row.id])) {
-        const lockedStr = row.inicio_reg || derivedCompletedTimes[row.id] || localCompletedTimes[row.id];
-        completedTimeStr = lockedStr;
-        estStartStr = lockedStr;
-        estEndStr = lockedStr;
-      } else {
-        const isFirstPending = idx === 0 || pdrRows[idx - 1]?.terminado;
-        let start: number;
-        if (isFirstPending) {
-          const nowTime = clockMinutes;
-          const schedTime = planTimes.startMin;
-          const diff = nowTime - schedTime;
-          if (diff > 0) {
-            start = nowTime;
-          } else {
-            start = schedTime;
-          }
-        } else {
-          start = runningEstEnd;
-        }
-        estStartStr = formatMinutesToTime(start);
-        estEndStr = formatMinutesToTime(start + row.duracion_min);
+      if (row.terminado) {
+        completedTimeStr = row.inicio_reg || derivedCompletedTimes[row.id] || localCompletedTimes[row.id];
       }
 
       // Real Duration (only if completed)
       let durationReal = 0;
-      if (row.terminado && (row.inicio_reg || derivedCompletedTimes[row.id] || localCompletedTimes[row.id])) {
+      if (row.terminado) {
         const matchedEnd = row.inicio_reg || derivedCompletedTimes[row.id] || localCompletedTimes[row.id];
         const prevMatchedEnd = idx > 0 && pdrRows[idx - 1]?.terminado 
           ? (pdrRows[idx - 1].inicio_reg || derivedCompletedTimes[pdrRows[idx - 1].id] || localCompletedTimes[pdrRows[idx - 1].id])
@@ -387,9 +396,9 @@ export default function App() {
         const startMin = idx === 0
           ? baseMin
           : prevMatchedEnd
-            ? parseTimeToMinutes(prevMatchedEnd)
+            ? parseTimeToMinutesEx(prevMatchedEnd, baseMin)
             : baseMin;
-        const endMin = parseTimeToMinutes(matchedEnd);
+        const endMin = parseTimeToMinutesEx(matchedEnd, baseMin + row.duracion_min);
         durationReal = Math.max(0, endMin - startMin);
       }
 
@@ -408,7 +417,7 @@ export default function App() {
         estTimes: {
           estimadaStartStr: estStartStr,
           estimadaEndStr: estEndStr,
-          originalEstimadaStart: formatMinutesToTime(origStartMin)
+          originalEstimadaStart: formatMinutesToTime(estStartMin)
         },
         durationReal,
         completedTimeStr,
@@ -589,13 +598,23 @@ export default function App() {
           <div>
             <div className="bg-slate-950/60 px-4 py-3 border-b border-slate-850 flex items-center justify-between text-xs text-slate-400">
               <span className="font-bold tracking-wider uppercase font-mono">PLAN DE RODAJE EN VIVO</span>
-              <button
-                onClick={() => setEntered(false)}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono text-indigo-400 hover:text-indigo-300 hover:bg-[#1f1a4a]/40 rounded border border-indigo-900/40 transition cursor-pointer"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-                <span>Volver a Inicio</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setEntered(false)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono text-indigo-400 hover:text-indigo-300 hover:bg-[#1f1a4a]/40 rounded border border-indigo-900/40 transition cursor-pointer"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span>Volver a Inicio</span>
+                </button>
+                <button
+                  onClick={() => setShowBetaModal(true)}
+                  title="Información beta"
+                  className="flex items-center justify-center w-6 h-6 rounded border border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-850 transition cursor-pointer"
+                  style={{ minWidth: '24px', minHeight: '24px' }}
+                >
+                  <HelpCircle className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
 
             <DesktopTable
@@ -628,6 +647,49 @@ export default function App() {
         handlePrevGalleryImage={handlePrevGalleryImage}
         handleNextGalleryImage={handleNextGalleryImage}
       />
+
+      {showBetaModal && (
+        <div id="beta-info-modal" className="fixed inset-0 bg-slate-950/85 z-55 flex items-center justify-center p-4 backdrop-blur-md animate-fade-in">
+          <div className="max-w-md w-full bg-slate-905 border border-slate-800 rounded-2xl p-6 shadow-2xl relative">
+            <button
+              id="close-beta-modal-btn"
+              onClick={() => setShowBetaModal(false)}
+              className="absolute top-4 right-4 p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-full transition cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div className="flex items-center gap-2 mb-4 text-[#fbbf24]">
+              <HelpCircle className="w-5 h-5 shrink-0" />
+              <h3 className="text-sm font-black tracking-tight font-mono uppercase">INFORMACIÓN BETA</h3>
+            </div>
+            
+            <div className="text-xs text-slate-300 font-sans space-y-3 leading-relaxed">
+              <p>
+                La aplicación que estás viendo, está en desarrollo y se encuentra en etapa beta por lo que puede contener errores o fallas.
+              </p>
+              <p>
+                El estado actual del rodaje y los tiempos estimados de inicio y fin de planos dependen de una conexión a base de datos y se actualizarán dinámicamente siempre que una fila sea marque como completada por el AD y este tenga conexión a internet.
+              </p>
+              <p className="pt-3 border-t border-slate-800/80 text-slate-400">
+                Si tienes alguna sugerencia o has detectado algún error en el funcionamiento de la app puedes enviarla al correo{" "}
+                <a href="mailto:arauco@gmail.com" className="text-amber-400 hover:text-amber-300 hover:underline font-mono">
+                  arauco@gmail.com
+                </a>
+              </p>
+            </div>
+            
+            <div className="mt-5 flex justify-end">
+              <button
+                id="close-beta-modal-footer-btn"
+                onClick={() => setShowBetaModal(false)}
+                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-mono rounded border border-slate-700 transition cursor-pointer hover:text-white"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
