@@ -596,9 +596,9 @@ export default function App() {
         {/* Plan Header */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex-1 flex flex-col justify-between">
           <div>
-            <div className="bg-slate-950/60 px-4 py-3 border-b border-slate-850 flex items-center justify-between text-xs text-slate-400">
-              <span className="font-bold tracking-wider uppercase font-mono">PLAN DE RODAJE EN VIVO</span>
-              <div className="flex items-center gap-2">
+            <div className="bg-slate-950/60 px-4 py-3 border-b border-slate-850 flex flex-col md:flex-row md:items-center justify-between text-xs text-slate-400 gap-2 md:gap-0">
+              <span className="font-bold tracking-wider uppercase font-mono order-2 md:order-1">PLAN DE RODAJE EN VIVO</span>
+              <div className="flex items-center gap-2 order-1 md:order-2 justify-end w-full md:w-auto">
                 <button
                   onClick={() => setEntered(false)}
                   className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono text-indigo-400 hover:text-indigo-300 hover:bg-[#1f1a4a]/40 rounded border border-indigo-900/40 transition cursor-pointer"
