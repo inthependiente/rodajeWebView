@@ -102,6 +102,7 @@ export interface PdrRow {
   shotlist: Shotlist;
   // Local active states for rodajeAPP
   terminado?: boolean;
+  inicio_reg?: string | null; // Hora registrada de inicio/fin de toma (HH:MM or Timestamp)
 }
 
 export interface OfflineSyncAction {
