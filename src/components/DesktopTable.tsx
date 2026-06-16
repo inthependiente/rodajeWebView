@@ -28,6 +28,30 @@ interface DesktopTableProps {
   triggerLightboxOpen: (row: PdrRow) => void;
 }
 
+function formatTimeToHHMM(timeStr: string | null | undefined): string {
+  if (!timeStr) return "";
+  if (timeStr.includes("T")) {
+    try {
+      const timePart = timeStr.split("T")[1];
+      if (timePart) {
+        const parts = timePart.split(":");
+        if (parts.length >= 2) {
+          return `${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}`;
+        }
+      }
+    } catch (_) { /* ignore */ }
+  }
+  if (timeStr.includes(":")) {
+    const parts = timeStr.split(":");
+    if (parts.length >= 2) {
+      const hour = parts[0].trim().slice(-2);
+      const min = parts[1].trim().slice(0, 2);
+      return `${hour.padStart(2, "0")}:${min.padStart(2, "0")}`;
+    }
+  }
+  return timeStr;
+}
+
 export default function DesktopTable({
   memoizedRows,
   localCompletedTimes,
@@ -78,16 +102,6 @@ export default function DesktopTable({
                     >
                       <CheckCircle className={`w-5 h-5 ${row.terminado ? "fill-emerald-400/20" : ""}`} />
                     </div>
-                    {row.terminado && (completedTimeStr || localCompletedTimes[row.id]) && (
-                      <div className="mt-1 flex flex-col items-center">
-                        <span className="text-[10px] font-bold font-mono tracking-tighter text-emerald-400 block leading-none">
-                          {completedTimeStr || localCompletedTimes[row.id]}
-                        </span>
-                        <span className="text-[9px] font-black font-mono tracking-tight text-emerald-500/80 block mt-1 bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-900/30 animate-pulse">
-                          {durationReal} min
-                        </span>
-                      </div>
-                    )}
                   </td>
 
                   {isSpecialRow ? (
@@ -124,9 +138,15 @@ export default function DesktopTable({
 
                       {/* Estimada */}
                       <td className="py-3 px-3 text-center font-mono bg-amber-955/5 text-amber-300 w-[75px]">
-                        <span className="text-[10px] font-semibold text-amber-500/80 block leading-none mb-1 font-mono">INICIA</span>
-                        <div className="font-black text-[16px] text-amber-400 leading-tight">{estTimes.estimadaStartStr}</div>
-                        <span className="text-[10px] text-slate-500 block mt-1">{estTimes.estimadaEndStr}</span>
+                        <span className="text-[10px] font-semibold text-amber-500/80 block leading-none mb-1 font-mono">
+                          {row.terminado ? "TERMINADA" : "INICIA"}
+                        </span>
+                        <div className="font-black text-[16px] text-amber-400 leading-tight">
+                          {row.terminado ? (formatTimeToHHMM(row.inicio_reg) || estTimes.estimadaStartStr) : estTimes.estimadaStartStr}
+                        </div>
+                        {!row.terminado && (
+                          <span className="text-[10px] text-slate-500 block mt-1">{estTimes.estimadaEndStr}</span>
+                        )}
                       </td>
 
                       {/* Description & notes */}

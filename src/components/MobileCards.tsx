@@ -9,6 +9,30 @@ interface MobileCardsProps {
   triggerLightboxOpen: (row: PdrRow) => void;
 }
 
+function formatTimeToHHMM(timeStr: string | null | undefined): string {
+  if (!timeStr) return "";
+  if (timeStr.includes("T")) {
+    try {
+      const timePart = timeStr.split("T")[1];
+      if (timePart) {
+        const parts = timePart.split(":");
+        if (parts.length >= 2) {
+          return `${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}`;
+        }
+      }
+    } catch (_) { /* ignore */ }
+  }
+  if (timeStr.includes(":")) {
+    const parts = timeStr.split(":");
+    if (parts.length >= 2) {
+      const hour = parts[0].trim().slice(-2);
+      const min = parts[1].trim().slice(0, 2);
+      return `${hour.padStart(2, "0")}:${min.padStart(2, "0")}`;
+    }
+  }
+  return timeStr;
+}
+
 export default function MobileCards({
   memoizedRows,
   localCompletedTimes,
@@ -65,7 +89,7 @@ export default function MobileCards({
                   {row.terminado ? (
                     <div className="flex items-center gap-1 bg-emerald-950/80 border border-emerald-500/30 px-2 py-0.5 rounded text-[10px] font-mono text-emerald-400">
                       <CheckCircle className="w-3.5 h-3.5 fill-emerald-400/10 shrink-0" />
-                      <span>FIN @ {completedTimeStr || localCompletedTimes[row.id]}</span>
+                      <span>TERMINADA</span>
                     </div>
                   ) : (
                     <div className="flex items-center gap-1 bg-slate-950/60 border border-slate-800/80 px-2 py-0.5 rounded text-[10px] font-mono text-slate-500">
@@ -88,11 +112,19 @@ export default function MobileCards({
                 </div>
 
                 <div className="flex flex-col items-center justify-center py-0.5 text-amber-300 bg-amber-955/5 rounded-lg">
-                  <span className="text-[9px] text-amber-500 font-bold uppercase tracking-wider mb-0.5 text-center">ESTIMADO</span>
-                  <div className="flex items-center gap-1 flex-wrap justify-center">
-                    <span className="text-[14px] font-black text-amber-450">{estTimes.estimadaStartStr}</span>
-                    <span className="text-[10px] text-amber-600/60">&bull;</span>
-                    <span className="text-[11px] text-slate-500">{estTimes.estimadaEndStr}</span>
+                  <span className="text-[9px] text-amber-500 font-bold uppercase tracking-wider mb-0.5 text-center">
+                    {row.terminado ? "TERMINADA" : "INICIA"}
+                  </span>
+                  <div className="flex items-center gap-1 flex-wrap justify-center font-mono">
+                    <span className="text-[14px] font-black text-amber-450">
+                      {row.terminado ? (formatTimeToHHMM(row.inicio_reg) || estTimes.estimadaStartStr) : estTimes.estimadaStartStr}
+                    </span>
+                    {!row.terminado && (
+                      <>
+                        <span className="text-[10px] text-amber-600/60">&bull;</span>
+                        <span className="text-[11px] text-slate-500">{estTimes.estimadaEndStr}</span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
