@@ -3,7 +3,8 @@ import {
   ChevronLeft,
   Clock,
   HelpCircle,
-  X
+  X,
+  ExternalLink
 } from "lucide-react";
 import { PdrRow, AppConfig, Proyecto, Llamado } from "./types";
 import LaunchScreen from "./components/LaunchScreen";
@@ -599,6 +600,17 @@ export default function App() {
             <div className="bg-slate-950/60 px-4 py-3 border-b border-slate-850 flex flex-col md:flex-row md:items-center justify-between text-xs text-slate-400 gap-2 md:gap-0">
               <span className="font-bold tracking-wider uppercase font-mono order-2 md:order-1">PLAN DE RODAJE EN VIVO</span>
               <div className="flex items-center gap-2 order-1 md:order-2 justify-end w-full md:w-auto">
+                {proyecto?.id && (
+                  <a
+                    href={`https://inthependiente.github.io/storyboardStudio/?project_id=${proyecto.id}&mode=presenter`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono text-amber-400 hover:text-amber-300 hover:bg-amber-950/20 rounded border border-amber-900/40 transition cursor-pointer"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Ver Storyboards</span>
+                  </a>
+                )}
                 <button
                   onClick={() => setEntered(false)}
                   className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono text-indigo-400 hover:text-indigo-300 hover:bg-[#1f1a4a]/40 rounded border border-indigo-900/40 transition cursor-pointer"
