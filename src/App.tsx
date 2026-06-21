@@ -602,7 +602,7 @@ export default function App() {
               <div className="flex items-center gap-2 order-1 md:order-2 justify-end w-full md:w-auto">
                 {proyecto?.id && (
                   <a
-                    href={`https://inthependiente.github.io/storyboardStudio/?project_id=${proyecto.id}&mode=presenter`}
+                    href={`https://inthependiente.github.io/storyboardStudio/?id=${proyecto.id}&mode=presenter`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono text-amber-400 hover:text-amber-300 hover:bg-amber-950/20 rounded border border-amber-900/40 transition cursor-pointer"
