@@ -28,7 +28,7 @@ export default function App() {
     return {
       supabaseUrl: DEFAULT_SUPABASE_URL,
       supabaseAnonKey: DEFAULT_ANON_KEY,
-      selectedLlamadoId: 44, // Default selection
+      selectedLlamadoId: 1, // Default selection (Día 1 de rodaje)
       mode: "online"
     };
   });
@@ -37,7 +37,7 @@ export default function App() {
   const [showSupabaseSettings, setShowSupabaseSettings] = useState(false);
   const [tempUrl, setTempUrl] = useState(config.supabaseUrl);
   const [tempKey, setTempKey] = useState(config.supabaseAnonKey);
-  const [tempLlamadoId, setTempLlamadoId] = useState(String(config.selectedLlamadoId || "44"));
+  const [tempLlamadoId, setTempLlamadoId] = useState(String(config.selectedLlamadoId || "1"));
 
   const [loading, setLoading] = useState(false);
   const [networkOnline, setNetworkOnline] = useState(navigator.onLine);
@@ -518,6 +518,28 @@ export default function App() {
     localCompletedTimes
   ]);
 
+  // Calculate "Plano Actual" minutes: compare current time vs the actual completion time of the last "Terminada" row
+  const planoActualMinutes = useMemo(() => {
+    // Find the last completed row
+    let lastCompletedIdx = -1;
+    for (let i = memoizedRows.length - 1; i >= 0; i--) {
+      if (memoizedRows[i].row.terminado) {
+        lastCompletedIdx = i;
+        break;
+      }
+    }
+
+    if (lastCompletedIdx === -1) return null;
+
+    const lastCompleted = memoizedRows[lastCompletedIdx];
+    // Use the actual time when the row was marked as "Terminada" (completedTimeStr)
+    const completedTime = lastCompleted.completedTimeStr;
+    if (!completedTime) return null;
+
+    const completedMin = parseTimeToMinutes(completedTime);
+    return clockMinutes - completedMin;
+  }, [memoizedRows, clockMinutes]);
+
   // Reference visual reference lightbox loader
   const triggerLightboxOpen = (selectedRow: PdrRow) => {
     const allVisualUrls = pdrRows
@@ -583,11 +605,16 @@ export default function App() {
       
       {/* Dynamic top persistent timing status calculator */}
       <div className={`sticky top-0 z-40 transition-colors backdrop-blur-md border-b flex items-center justify-center px-4 py-3 md:px-6 shadow-xl ${calculatedState.class}`}>
-        <div className="flex items-center gap-3 justify-center text-center">
+        <div className="flex items-center gap-3 justify-center text-center flex-wrap">
           <Clock className="w-5 h-5 shrink-0 animate-pulse" />
           <h1 className="text-sm md:text-base font-black tracking-wide font-mono uppercase">
             {calculatedState.text}
           </h1>
+          {planoActualMinutes !== null && (
+            <span className="text-sm md:text-base font-black tracking-wide font-mono uppercase border-l border-white/20 pl-3">
+              Plano Actual - {Math.abs(planoActualMinutes)} MIN
+            </span>
+          )}
         </div>
       </div>
 
