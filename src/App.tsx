@@ -1,50 +1,63 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
+  CheckCircle,
   ChevronLeft,
-  Clock,
-  HelpCircle,
+  ChevronRight,
   X,
-  ExternalLink
+  Clock,
+  Eye,
+  RefreshCw,
+  Loader2
 } from "lucide-react";
 import { PdrRow, AppConfig, Proyecto, Llamado } from "./types";
-import LaunchScreen from "./components/LaunchScreen";
-import DesktopTable from "./components/DesktopTable";
-import MobileCards from "./components/MobileCards";
-import LightboxGallery from "./components/LightboxGallery";
 
-// Fallback dynamic configurations
+// Production API configurations (Supabase connection parameters)
 const DEFAULT_SUPABASE_URL = "https://mvmlwelmilhitoetessx.supabase.co";
 const DEFAULT_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im12bWx3ZWxtaWxoaXRvZXRlc3N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5NTYxOTksImV4cCI6MjA5NjUzMjE5OX0.1MIsmOLAZM31b1BsysxII88U6JzOQWMp5kNDRiFmCnc";
 
+// Minimal safe fallback definitions
+const EMPTY_PROYECTO: Proyecto = {
+  id: 0,
+  productora: "Productora",
+  campana: "Campaña",
+  cliente: "",
+  color_cliente: "#1e1b4b"
+};
+
+const EMPTY_LLAMADO: Llamado = {
+  id: 0,
+  proyecto_id: 0,
+  d_o_d: "LLAMADO",
+  fecha: "",
+  llamado_hora: "08:00",
+  desayuno: "-",
+  almuerzo: "-",
+  cena: "-",
+  notas: ""
+};
+
 export default function App() {
-  // Configuration for DB Connection
-  const [config, setConfig] = useState<AppConfig>(() => {
+  const [config] = useState<AppConfig>(() => {
     const saved = localStorage.getItem("rodajeAPP_config_v2");
     if (saved) {
-      try { 
-        return JSON.parse(saved); 
+      try {
+        return JSON.parse(saved);
       } catch (e) { /* ignore */ }
     }
     return {
       supabaseUrl: DEFAULT_SUPABASE_URL,
       supabaseAnonKey: DEFAULT_ANON_KEY,
-      selectedLlamadoId: 44, // Default selection
+      selectedLlamadoId: 42,
       mode: "online"
     };
   });
 
   const [entered, setEntered] = useState(false);
-  const [showSupabaseSettings, setShowSupabaseSettings] = useState(false);
-  const [tempUrl, setTempUrl] = useState(config.supabaseUrl);
-  const [tempKey, setTempKey] = useState(config.supabaseAnonKey);
-  const [tempLlamadoId, setTempLlamadoId] = useState(String(config.selectedLlamadoId || "44"));
-
   const [loading, setLoading] = useState(false);
-  const [networkOnline, setNetworkOnline] = useState(navigator.onLine);
 
   // Core Data
-  const [proyecto, setProyecto] = useState<Proyecto | null>(null);
-  const [llamado, setLlamado] = useState<Llamado | null>(null);
+  const [proyecto, setProyecto] = useState<Proyecto>(EMPTY_PROYECTO);
+  const [llamado, setLlamado] = useState<Llamado>(EMPTY_LLAMADO);
 
   const [proyectosList, setProyectosList] = useState<Proyecto[]>(() => {
     const cached = localStorage.getItem("rodajeAPP_v2_cache_all_proyectos");
@@ -61,12 +74,13 @@ export default function App() {
     }
     return [];
   });
+
   const [pdrRows, setPdrRows] = useState<PdrRow[]>([]);
   const [localCompletedTimes, setLocalCompletedTimes] = useState<Record<number, string>>({});
+  const [dbCompletedTimes, setDbCompletedTimes] = useState<Record<number, string>>({});
 
-  // Reference visualizer scrollable modal
+  // Lightbox modal Gallery
   const [activeRefImage, setActiveRefImage] = useState<string | null>(null);
-  const [showBetaModal, setShowBetaModal] = useState(false);
   const [imageGallery, setImageGallery] = useState<string[]>([]);
   const [galleryIndex, setGalleryIndex] = useState(0);
 
@@ -76,91 +90,58 @@ export default function App() {
     return now.getHours() * 60 + now.getMinutes();
   });
 
-  // Setup clock listener (updates synchronized with system minute change precisely)
+  // Setup clock listener (updates once per minute)
   useEffect(() => {
-    let timeoutId: any;
-    let intervalId: any;
-
-    const updateClock = () => {
+    const interval = setInterval(() => {
       const now = new Date();
       setClockMinutes(now.getHours() * 60 + now.getMinutes());
-    };
-
-    const syncClock = () => {
-      updateClock();
-      const now = new Date();
-      const delay = 60000 - (now.getSeconds() * 1000 + now.getMilliseconds()) + 100; // Aligned precisely with the next minute (plus minor safety offset)
-      timeoutId = setTimeout(() => {
-        updateClock();
-        intervalId = setInterval(updateClock, 60000);
-      }, delay);
-    };
-
-    syncClock();
-
-    return () => {
-      clearTimeout(timeoutId);
-      clearInterval(intervalId);
-    };
+    }, 60000);
+    return () => clearInterval(interval);
   }, []);
 
-  // Update online listener
+  // Sync projects and llamados list initially from cache & live Supabase
   useEffect(() => {
-    const updateOnlineStatus = () => setNetworkOnline(navigator.onLine);
-    window.addEventListener("online", updateOnlineStatus);
-    window.addEventListener("offline", updateOnlineStatus);
-    return () => {
-      window.removeEventListener("online", updateOnlineStatus);
-      window.removeEventListener("offline", updateOnlineStatus);
-    };
-  }, []);
-
-  // Save config back on change
-  useEffect(() => {
-    localStorage.setItem("rodajeAPP_config_v2", JSON.stringify(config));
-    setTempUrl(config.supabaseUrl);
-    setTempKey(config.supabaseAnonKey);
-    setTempLlamadoId(String(config.selectedLlamadoId || ""));
-  }, [config]);
-
-  // Sync project & default llamado with URL search parameter "?id=X"
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const queryId = urlParams.get("id");
-    if (queryId) {
-      const pId = parseInt(queryId, 10);
-      const foundProj = proyectosList.find(p => p.id === pId);
-      if (foundProj) {
-        setProyecto(foundProj);
-        
-        const related = llamadosList.filter(l => l.proyecto_id === pId);
-        if (related.length > 0) {
-          const isCurrentLlam_related = related.some(l => l.id === config.selectedLlamadoId);
-          if (!isCurrentLlam_related) {
-            const firstLlam = related[0];
-            setLlamado(firstLlam);
-            setConfig(prev => ({ ...prev, selectedLlamadoId: firstLlam.id }));
-          } else {
-            const currentLlam = related.find(l => l.id === config.selectedLlamadoId);
-            if (currentLlam) {
-              setLlamado(currentLlam);
-            }
+    const fetchInitialIndex = async () => {
+      try {
+        const headers = {
+          "apikey": config.supabaseAnonKey,
+          "Authorization": `Bearer ${config.supabaseAnonKey}`,
+          "Content-Type": "application/json"
+        };
+        const allProjRes = await fetch(`${config.supabaseUrl}/rest/v1/proyectos?select=*`, { headers });
+        if (allProjRes.ok) {
+          const allProjData = await allProjRes.json();
+          if (allProjData && allProjData.length > 0) {
+            setProyectosList(allProjData);
+            localStorage.setItem("rodajeAPP_v2_cache_all_proyectos", JSON.stringify(allProjData));
           }
         }
+        const allLlamRes = await fetch(`${config.supabaseUrl}/rest/v1/llamados?select=*`, { headers });
+        if (allLlamRes.ok) {
+          const allLlamData = await allLlamRes.json();
+          if (allLlamData && allLlamData.length > 0) {
+            setLlamadosList(allLlamData);
+            localStorage.setItem("rodajeAPP_v2_cache_all_llamados", JSON.stringify(allLlamData));
+          }
+        }
+      } catch (err) {
+        console.warn("Could not load initial index from Supabase", err);
       }
+    };
+    if (navigator.onLine) {
+      fetchInitialIndex();
     }
-  }, [proyectosList, llamadosList, config.selectedLlamadoId]);
+  }, [config.supabaseUrl, config.supabaseAnonKey]);
 
-  // Load from cache or fetch from real Supabase database
-  const cacheKeySuffix = config.selectedLlamadoId || 44;
-
-  const loadCachedOrFetch = useCallback(async () => {
+  // Read raw database or cache upon loading or changing selected llamado
+  const loadCachedOrFetch = useCallback(async (forcedId?: number) => {
+    const activeId = forcedId || config.selectedLlamadoId || 42;
     setLoading(true);
 
-    const cachedProyecto = localStorage.getItem(`rodajeAPP_v2_cache_proyecto_${cacheKeySuffix}`);
-    const cachedLlamado = localStorage.getItem(`rodajeAPP_v2_cache_llamado_${cacheKeySuffix}`);
-    const cachedPdr = localStorage.getItem(`rodajeAPP_v2_cache_pdr_${cacheKeySuffix}`);
-    const cachedCompTimes = localStorage.getItem(`rodajeAPP_v2_cache_compTimes_${cacheKeySuffix}`);
+    const cachedProyecto = localStorage.getItem(`rodajeAPP_v2_cache_proyecto_${activeId}`);
+    const cachedLlamado = localStorage.getItem(`rodajeAPP_v2_cache_llamado_${activeId}`);
+    const cachedPdr = localStorage.getItem(`rodajeAPP_v2_cache_pdr_${activeId}`);
+    const cachedCompTimes = localStorage.getItem(`rodajeAPP_v2_cache_compTimes_${activeId}`);
 
     if (cachedProyecto && cachedLlamado && cachedPdr) {
       try {
@@ -169,13 +150,14 @@ export default function App() {
         setPdrRows(JSON.parse(cachedPdr));
         if (cachedCompTimes) {
           setLocalCompletedTimes(JSON.parse(cachedCompTimes));
+          setDbCompletedTimes(JSON.parse(cachedCompTimes));
         }
       } catch (e) {
         console.error("Cache parsing error", e);
       }
     }
 
-    if (config.mode === "online" && navigator.onLine) {
+    if (navigator.onLine) {
       try {
         const headers = {
           "apikey": config.supabaseAnonKey,
@@ -183,55 +165,27 @@ export default function App() {
           "Content-Type": "application/json"
         };
 
-        // Fetch projects
-        try {
-          const allProjRes = await fetch(`${config.supabaseUrl}/rest/v1/proyectos?select=*`, { headers });
-          if (allProjRes.ok) {
-            const allProjData = await allProjRes.json();
-            if (allProjData && allProjData.length > 0) {
-              setProyectosList(allProjData);
-              localStorage.setItem("rodajeAPP_v2_cache_all_proyectos", JSON.stringify(allProjData));
-            }
-          }
-        } catch (projErr) {
-          console.warn("Could not fetch todos los proyectos", projErr);
-        }
-
-        // Fetch llamados
-        try {
-          const allLlamRes = await fetch(`${config.supabaseUrl}/rest/v1/llamados?select=*`, { headers });
-          if (allLlamRes.ok) {
-            const allLlamData = await allLlamRes.json();
-            if (allLlamData && allLlamData.length > 0) {
-              setLlamadosList(allLlamData);
-              localStorage.setItem("rodajeAPP_v2_cache_all_llamados", JSON.stringify(allLlamData));
-            }
-          }
-        } catch (llamErr) {
-          console.warn("Could not fetch llamados", llamErr);
-        }
-
-        // Fetch active llamado
-        const url = `${config.supabaseUrl}/rest/v1/llamados?id=eq.${cacheKeySuffix}&select=*,proyectos(*)`;
+        const url = `${config.supabaseUrl}/rest/v1/llamados?id=eq.${activeId}&select=*,proyectos(*)`;
         const res = await fetch(url, { headers });
         if (res.ok) {
           const data = await res.json();
           if (data && data.length > 0) {
             const activeLlamado = data[0];
-            let activeProyecto = activeLlamado.proyectos || null;
-            if (!activeProyecto) {
+            let activeProyecto = activeLlamado.proyectos;
+            if (!activeProyecto && proyectosList.length > 0) {
               const foundProj = proyectosList.find(p => p.id === activeLlamado.proyecto_id);
-              if (foundProj) {
-                activeProyecto = foundProj;
-              }
-            }
-            setLlamado(activeLlamado);
-            if (activeProyecto) {
-              setProyecto(activeProyecto);
+              if (foundProj) activeProyecto = foundProj;
             }
 
-            // Fetch Plan de Rodaje (pdr) list matching SQLite-Supabase tables schema
-            const pdrUrl = `${config.supabaseUrl}/rest/v1/pdr?llamado_id=eq.${cacheKeySuffix}&select=id,orden,duracion_min,status,inicio_reg,shotlist_id,shotlist(id,esc,plano,descripcion,cast_nombres,notas,referencia_urls)&order=orden.asc`;
+            if (activeProyecto) {
+              setProyecto(activeProyecto);
+              localStorage.setItem(`rodajeAPP_v2_cache_proyecto_${activeId}`, JSON.stringify(activeProyecto));
+            }
+            setLlamado(activeLlamado);
+            localStorage.setItem(`rodajeAPP_v2_cache_llamado_${activeId}`, JSON.stringify(activeLlamado));
+
+            // Fetch list in order
+            const pdrUrl = `${config.supabaseUrl}/rest/v1/pdr?llamado_id=eq.${activeId}&select=id,orden,duracion_min,status,shotlist_id,shotlist(id,esc,plano,descripcion,cast_nombres,notas,referencia_urls)&order=orden.asc`;
             const pdrRes = await fetch(pdrUrl, { headers });
             if (pdrRes.ok) {
               const pdrData = await pdrRes.json();
@@ -239,58 +193,107 @@ export default function App() {
                 id: p.id,
                 orden: p.orden,
                 duracion_min: p.duracion_min || 15,
-                llamado_id: cacheKeySuffix,
+                llamado_id: activeId,
                 shotlist_id: p.shotlist_id,
                 terminado: !!p.status,
-                inicio_reg: p.inicio_reg,
                 shotlist: {
-                  id: p.shotlist?.id ?? p.shotlist_id ?? 0,
-                  esc: p.shotlist?.esc ?? "",
-                  plano: p.shotlist?.plano ?? "",
-                  descripcion: p.shotlist?.descripcion ?? "",
-                  cast_nombres: p.shotlist?.cast_nombres ?? "",
-                  notas: p.shotlist?.notes ?? p.shotlist?.notas ?? "",
-                  referencia_urls: p.shotlist?.referencia_urls ?? ""
+                  id: p.shotlist?.id || Math.floor(Math.random() * 100000),
+                  esc: p.shotlist?.esc || "12",
+                  plano: p.shotlist?.plano || "1",
+                  descripcion: p.shotlist?.descripcion || "Plano sin descripción",
+                  cast_nombres: p.shotlist?.cast_nombres || "",
+                  notas: p.shotlist?.notas || "",
+                  referencia_urls: p.shotlist?.referencia_urls || ""
                 }
               }));
               setPdrRows(parsed);
+              localStorage.setItem(`rodajeAPP_v2_cache_pdr_${activeId}`, JSON.stringify(parsed));
               
-              // Build status mapping of already finished items with mock completed time strings
-              const mappedTimes: Record<number, string> = {};
-              let curMin = parseTimeToMinutes(activeLlamado.llamado_hora || "08:00");
-              parsed.forEach((row) => {
-                if (row.terminado) {
-                  curMin += row.duracion_min;
-                  mappedTimes[row.id] = formatMinutesToTime(curMin);
-                } else {
-                  curMin += row.duracion_min;
+              const compTimes: Record<number, string> = {};
+              pdrData.forEach((p: any) => {
+                if (p.status) {
+                  compTimes[p.id] = p.status;
                 }
               });
-              setLocalCompletedTimes(mappedTimes);
-
-              // Save to cache
-              if (activeProyecto) {
-                localStorage.setItem(`rodajeAPP_v2_cache_proyecto_${cacheKeySuffix}`, JSON.stringify(activeProyecto));
-              }
-              localStorage.setItem(`rodajeAPP_v2_cache_llamado_${cacheKeySuffix}`, JSON.stringify(activeLlamado));
-              localStorage.setItem(`rodajeAPP_v2_cache_pdr_${cacheKeySuffix}`, JSON.stringify(parsed));
-              localStorage.setItem(`rodajeAPP_v2_cache_compTimes_${cacheKeySuffix}`, JSON.stringify(mappedTimes));
+              setDbCompletedTimes(compTimes);
             }
           }
         }
-      } catch (err: any) {
-        console.warn("Unable to connect with Supabase live server:", err);
+      } catch (err) {
+        console.warn("Could not fetch active plan from Supabase", err);
       }
     }
     setLoading(false);
-  }, [cacheKeySuffix, config.supabaseUrl, config.supabaseAnonKey, config.mode, proyectosList]);
+  }, [config.supabaseUrl, config.supabaseAnonKey, config.selectedLlamadoId, proyectosList]);
 
+  // Synchronize on selected Called change
   useEffect(() => {
     loadCachedOrFetch();
   }, [loadCachedOrFetch]);
 
-  // Timings and Minutes Calculators
-  const baseLlamadoMinutes = parseTimeToMinutes(llamado?.llamado_hora || "08:00");
+  // Synchronize matching list with fallback states
+  useEffect(() => {
+    if (proyectosList.length > 0 && proyecto.id === 0) {
+      const activeLlamId = config.selectedLlamadoId;
+      const matchingLlam = llamadosList.find(l => l.id === activeLlamId);
+      if (matchingLlam) {
+        const matchingProj = proyectosList.find(p => p.id === matchingLlam.proyecto_id);
+        if (matchingProj) {
+          setProyecto(matchingProj);
+          setLlamado(matchingLlam);
+          return;
+        }
+      }
+      setProyecto(proyectosList[0]);
+    }
+  }, [proyectosList, llamadosList, config.selectedLlamadoId, proyecto.id]);
+
+  useEffect(() => {
+    if (llamadosList.length > 0 && llamado.id === 0) {
+      const activeLlamId = config.selectedLlamadoId;
+      const matchingLlam = llamadosList.find(l => l.id === activeLlamId);
+      if (matchingLlam) {
+        setLlamado(matchingLlam);
+      } else {
+        const related = llamadosList.filter(l => l.proyecto_id === proyecto.id);
+        if (related.length > 0) {
+          setLlamado(related[0]);
+        }
+      }
+    }
+  }, [llamadosList, proyecto.id, llamado.id, config.selectedLlamadoId]);
+
+  // Sync project & default llamado with URL search parameters
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const queryId = urlParams.get("id");
+    const queryLlam = urlParams.get("llamado_id");
+
+    if (queryLlam && llamadosList.length > 0) {
+      const lId = parseInt(queryLlam, 10);
+      const foundLlam = llamadosList.find(l => l.id === lId);
+      if (foundLlam) {
+        setLlamado(foundLlam);
+        const foundProj = proyectosList.find(p => p.id === foundLlam.proyecto_id);
+        if (foundProj) setProyecto(foundProj);
+        setEntered(true);
+        loadCachedOrFetch(lId);
+      }
+    } else if (queryId && proyectosList.length > 0) {
+      const pId = parseInt(queryId, 10);
+      const foundProj = proyectosList.find(p => p.id === pId);
+      if (foundProj) {
+        setProyecto(foundProj);
+        const related = llamadosList.filter(l => l.proyecto_id === pId);
+        if (related.length > 0) {
+          setLlamado(related[0]);
+        }
+      }
+    }
+  }, [proyectosList, llamadosList, loadCachedOrFetch]);
+
+  // Timings algorithms
+  const baseLlamadoMinutes = parseTimeToMinutes(llamado.llamado_hora || "08:00");
 
   function parseTimeToMinutes(tStr: string): number {
     const m = (tStr || "08:00").match(/^(\d{1,2}):(\d{2})/);
@@ -304,139 +307,78 @@ export default function App() {
     return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
   }
 
-  // Premium Performance optimizations: Pack calculations into a highly consolidated memoized hook
-  const memoizedRows = useMemo(() => {
-    const baseHour = llamado?.llamado_hora || "08:00";
-    const baseMin = parseTimeToMinutes(baseHour);
-    
-    // Calculate local completed times dynamically to enforce unified source of truth
-    const derivedCompletedTimes: Record<number, string> = {};
-    let curCompletedMin = baseMin;
-    pdrRows.forEach((row) => {
-      const nextMin = curCompletedMin + row.duracion_min;
-      if (row.terminado) {
-        derivedCompletedTimes[row.id] = formatMinutesToTime(nextMin);
-      }
-      curCompletedMin = nextMin;
-    });
-
-    let planCumulative = baseMin;
-    
-    // 1. Precalculate plan timings
-    const rawPlan = pdrRows.map((row) => {
-      const start = planCumulative;
-      planCumulative += row.duracion_min;
-      return {
-        plannedStartStr: formatMinutesToTime(start),
-        plannedEndStr: formatMinutesToTime(planCumulative),
-        startMin: start,
-        endMin: planCumulative
-      };
-    });
-
-    // 2. Precalculate estimated timings, real durations, and references
-    let runningEstEndMin = baseMin;
-
-    const parseTimeToMinutesEx = (timeStr: string | null | undefined, defaultMin: number): number => {
-      if (!timeStr) return defaultMin;
-      let s = timeStr;
-      if (s.includes("T")) {
-        try {
-          const parts = s.split("T");
-          if (parts[1]) {
-            s = parts[1];
-          }
-        } catch (_) {}
-      }
-      if (s.includes(":")) {
-        const parts = s.split(":");
-        if (parts.length >= 2) {
-          const h = parseInt(parts[0], 10);
-          const m = parseInt(parts[1], 10);
-          if (!isNaN(h) && !isNaN(m)) {
-            return h * 60 + m;
-          }
-        }
-      }
-      return defaultMin;
+  // 1. Planned timetable mapping
+  let planCumulative = baseLlamadoMinutes;
+  const rawPlanTimings = pdrRows.map((row) => {
+    const start = planCumulative;
+    planCumulative += row.duracion_min;
+    return {
+      pdrId: row.id,
+      plannedStartStr: formatMinutesToTime(start),
+      plannedEndStr: formatMinutesToTime(planCumulative),
+      startMin: start,
+      endMin: planCumulative
     };
+  });
 
-    return pdrRows.map((row, idx) => {
-      const planTimes = rawPlan[idx] || { startMin: baseMin, endMin: baseMin + row.duracion_min, plannedStartStr: "08:00", plannedEndStr: "08:15" };
-      
-      let estStartMin: number;
-      if (idx === 0) {
-        estStartMin = baseMin;
+  // 2. Estimated timetable logic matching Swift computation
+  let runningEstEnd = baseLlamadoMinutes;
+  const wrapEstTimings = pdrRows.map((row, idx) => {
+    const planTimes = rawPlanTimings[idx] || { startMin: baseLlamadoMinutes, endMin: baseLlamadoMinutes + row.duracion_min };
+    
+    let origStartMin: number;
+    if (idx === 0) {
+      origStartMin = baseLlamadoMinutes;
+    } else {
+      const prevRow = pdrRows[idx - 1];
+      if (prevRow.terminado && localCompletedTimes[prevRow.id]) {
+        origStartMin = parseTimeToMinutes(localCompletedTimes[prevRow.id]);
       } else {
-        const prevRow = pdrRows[idx - 1];
-        if (prevRow.terminado) {
-          estStartMin = parseTimeToMinutesEx(prevRow.inicio_reg, runningEstEndMin);
-        } else {
-          estStartMin = runningEstEndMin;
-        }
+        origStartMin = runningEstEnd;
       }
-      
-      const estEndMin = estStartMin + row.duracion_min;
-      runningEstEndMin = estEndMin;
-      
-      const estStartStr = formatMinutesToTime(estStartMin);
-      const estEndStr = formatMinutesToTime(estEndMin);
-      
-      let completedTimeStr: string | null = null;
-      if (row.terminado) {
-        completedTimeStr = row.inicio_reg || derivedCompletedTimes[row.id] || localCompletedTimes[row.id];
+    }
+    
+    runningEstEnd = origStartMin + row.duracion_min;
+    
+    let estStartStr = "";
+    let estEndStr = "";
+    
+    if (row.terminado && localCompletedTimes[row.id]) {
+      const lockedStr = localCompletedTimes[row.id];
+      estStartStr = lockedStr;
+      estEndStr = lockedStr;
+    } else {
+      const isFirstPending = idx === 0 || pdrRows[idx - 1].terminado;
+      let start: number;
+      if (isFirstPending) {
+        const nowTime = clockMinutes;
+        const schedTime = planTimes.startMin;
+        const diff = nowTime - schedTime;
+        start = diff > 0 ? nowTime : schedTime;
+      } else {
+        start = runningEstEnd;
       }
+      estStartStr = formatMinutesToTime(start);
+      estEndStr = formatMinutesToTime(start + row.duracion_min);
+    }
+    
+    return {
+      pdrId: row.id,
+      estimadaStartStr: estStartStr,
+      estimadaEndStr: estEndStr,
+      originalEstimadaStart: formatMinutesToTime(origStartMin)
+    };
+  });
 
-      // Real Duration (only if completed)
-      let durationReal = 0;
-      if (row.terminado) {
-        const matchedEnd = row.inicio_reg || derivedCompletedTimes[row.id] || localCompletedTimes[row.id];
-        const prevMatchedEnd = idx > 0 && pdrRows[idx - 1]?.terminado 
-          ? (pdrRows[idx - 1].inicio_reg || derivedCompletedTimes[pdrRows[idx - 1].id] || localCompletedTimes[pdrRows[idx - 1].id])
-          : null;
-        const startMin = idx === 0
-          ? baseMin
-          : prevMatchedEnd
-            ? parseTimeToMinutesEx(prevMatchedEnd, baseMin)
-            : baseMin;
-        const endMin = parseTimeToMinutesEx(matchedEnd, baseMin + row.duracion_min);
-        durationReal = Math.max(0, endMin - startMin);
-      }
-
-      // First reference photo
-      const firstPhoto = row.shotlist?.referencia_urls && row.shotlist.referencia_urls.trim().length > 6
-         ? row.shotlist.referencia_urls.split(",")[0].trim()
-         : null;
-
-      // Special row pattern
-      const isSpecialRow = row.shotlist?.plano?.toUpperCase() === "ES";
-
-      return {
-        row,
-        index: idx,
-        planTimes,
-        estTimes: {
-          estimadaStartStr: estStartStr,
-          estimadaEndStr: estEndStr,
-          originalEstimadaStart: formatMinutesToTime(estStartMin)
-        },
-        durationReal,
-        completedTimeStr,
-        firstPhoto,
-        isSpecialRow
-      };
-    });
-  }, [pdrRows, clockMinutes]);
-
-  // 3. Estado real-time calculated desvío values
+  // 3. Dynamic Estado heading calculation
   const analyzeRealTimeCalculatedState = () => {
     if (pdrRows.length === 0) {
-      return { text: "SIN PLANOS EN EL PLAN", class: "bg-slate-900 border-slate-700 text-zinc-300 pointer-events-none" };
+      return { text: "SIN PLANOS EN EL PLAN", class: "bg-slate-900 border-slate-700 text-zinc-350" };
     }
 
     if (llamado && llamado.fecha) {
       try {
-        const targetDateStr = llamado.fecha.substring(0, 10); // "YYYY-MM-DD"
+        const targetDateStr = llamado.fecha.substring(0, 10);
         const parts = targetDateStr.split('-');
         const formattedDate = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : targetDateStr;
         
@@ -448,14 +390,9 @@ export default function App() {
 
         if (targetDateStr !== todayDateStr) {
           if (targetDateStr > todayDateStr) {
-            return { text: `PROGRAMADO: ${formattedDate}`, class: "bg-indigo-950/80 border-indigo-500 text-indigo-400 font-bold" };
+            return { text: `PROGRAMADO: ${formattedDate}`, class: "bg-indigo-950/85 border-indigo-900/40 text-indigo-305 font-bold font-mono text-center" };
           } else {
-            return { text: `CONCLUIDO: ${formattedDate}`, class: "bg-slate-900/90 border-slate-800 text-slate-400 font-medium" };
-          }
-        } else {
-          if (clockMinutes < baseLlamadoMinutes) {
-            const timeStr = llamado.llamado_hora || "08:00";
-            return { text: `PROGRAMADO: ${formattedDate} - ${timeStr}`, class: "bg-indigo-950/80 border-indigo-500 text-indigo-400 font-bold" };
+            return { text: `CONCLUIDO: ${formattedDate}`, class: "bg-slate-900/90 border-slate-850/60 text-slate-400 font-medium font-mono text-center" };
           }
         }
       } catch (err) {
@@ -463,7 +400,6 @@ export default function App() {
       }
     }
 
-    // Find first pending shot index
     const firstPendingIdx = pdrRows.findIndex((row) => !row.terminado);
 
     if (firstPendingIdx !== -1) {
@@ -471,22 +407,20 @@ export default function App() {
       for (let i = 0; i < firstPendingIdx; i++) {
         a += pdrRows[i].duracion_min;
       }
-      
       const b = pdrRows[firstPendingIdx].duracion_min;
       const c = a + b;
       const d = clockMinutes;
       
       if (d > c) {
         const diff = d - c;
-        return { text: `${diff} MINUTOS ATRASADO`, class: "bg-rose-950/80 border-rose-500 text-rose-400 font-black font-mono tracking-wide" };
+        return { text: `${diff} MINUTOS ATRASADO`, class: "bg-rose-950/90 border-rose-900/40 text-rose-400 font-black font-mono tracking-wide text-center" };
       } else if (d >= a && d <= c) {
-        return { text: "RODAJE A TIEMPO", class: "bg-cyan-950/80 border-cyan-500 text-cyan-400 font-black font-mono tracking-wide" };
+        return { text: "RODAJE A TIEMPO", class: "bg-cyan-950/90 border-cyan-900/40 text-cyan-400 font-black font-mono tracking-wide text-center" };
       } else {
         const diff = c - d;
-        return { text: `${diff} MINUTOS ADELANTADO`, class: "bg-emerald-950/80 border-emerald-500 text-emerald-400 font-black font-mono tracking-wide" };
+        return { text: `${diff} MINUTOS ADELANTADO`, class: "bg-emerald-950/90 border-emerald-900/40 text-emerald-400 font-black font-mono tracking-wide text-center" };
       }
     } else {
-      // All done
       const lastDone = pdrRows[pdrRows.length - 1];
       if (lastDone && localCompletedTimes[lastDone.id]) {
         const actualMin = parseTimeToMinutes(localCompletedTimes[lastDone.id]);
@@ -498,27 +432,55 @@ export default function App() {
         
         const difference = actualMin - totalPlanMin;
         if (difference === 0) {
-          return { text: "RODAJE FINALIZADO A TIEMPO", class: "bg-cyan-950/80 border-cyan-500 text-cyan-400 font-black font-mono tracking-wide" };
+          return { text: "RODAJE FINALIZADO A TIEMPO", class: "bg-cyan-950/90 border-cyan-900/40 text-cyan-400 font-black font-mono tracking-wide text-center" };
         } else if (difference < 0) {
-          return { text: `FINALIZADO: ${Math.abs(difference)} MIN ADELANTO`, class: "bg-emerald-950/80 border-emerald-500 text-emerald-400 font-black font-mono tracking-wide" };
+          return { text: `FINALIZADO: ${Math.abs(difference)} MIN ADELANTO`, class: "bg-emerald-950/90 border-emerald-900/40 text-emerald-400 font-black font-mono tracking-wide text-center" };
         } else {
-          return { text: `FINALIZADO: ${difference} MIN RETRASO`, class: "bg-rose-950/80 border-rose-500 text-rose-400 font-black font-mono tracking-wide" };
+          return { text: `FINALIZADO: ${difference} MIN RETRASO`, class: "bg-rose-950/90 border-rose-900/40 text-rose-400 font-black font-mono tracking-wide text-center" };
         }
       }
     }
 
-    return { text: "RODAJE INICIADO A TIEMPO", class: "bg-cyan-950/80 border-cyan-500 text-cyan-300 font-mono" };
+    return { text: "RODAJE INICIADO A TIEMPO", class: "bg-cyan-950/90 border-cyan-900/40 text-cyan-300 font-mono text-center" };
   };
 
-  const calculatedState = useMemo(() => analyzeRealTimeCalculatedState(), [
-    pdrRows,
-    llamado,
-    clockMinutes,
-    baseLlamadoMinutes,
-    localCompletedTimes
-  ]);
+  const calculatedState = analyzeRealTimeCalculatedState();
 
-  // Reference visual reference lightbox loader
+  // "Toma Actual" timer calculation
+  const getTomaActualText = (): string => {
+    if (pdrRows.length === 0) return "";
+    
+    // Check if all rows are finished. If so, there's no plano actual
+    const hasPending = pdrRows.some((row) => !row.terminado);
+    if (!hasPending) {
+      return "";
+    }
+
+    // Get all completed rows
+    const completedRows = pdrRows.filter((row) => row.terminado);
+    
+    let startMinutes = baseLlamadoMinutes;
+    if (completedRows.length > 0) {
+      const lastCompletedRow = completedRows[completedRows.length - 1];
+      const completedTimeStr = dbCompletedTimes[lastCompletedRow.id] || localCompletedTimes[lastCompletedRow.id];
+      if (completedTimeStr) {
+        startMinutes = parseTimeToMinutes(completedTimeStr);
+      } else {
+        // Fallback to the planned end of the last completed row
+        const lastIdx = pdrRows.findIndex((row) => row.id === lastCompletedRow.id);
+        if (lastIdx !== -1 && rawPlanTimings[lastIdx]) {
+          startMinutes = parseTimeToMinutes(rawPlanTimings[lastIdx].plannedEndStr);
+        }
+      }
+    }
+
+    const diff = clockMinutes - startMinutes;
+    return `PLANO ACTUAL - ${diff}`;
+  };
+
+  const tomaActualText = getTomaActualText();
+
+  // Reference visual lightbox handler
   const triggerLightboxOpen = (selectedRow: PdrRow) => {
     const allVisualUrls = pdrRows
       .map((r) => r.shotlist?.referencia_urls)
@@ -553,93 +515,450 @@ export default function App() {
     setActiveRefImage(imageGallery[nextIdx]);
   };
 
+  const relatedLlamados = estimadosLlamadosForProject(proyecto.id);
+
+  function estimadosLlamadosForProject(projId: number): Llamado[] {
+    return llamadosList.filter((l) => l.proyecto_id === projId);
+  }
+
   if (!entered) {
     return (
-      <LaunchScreen
-        proyecto={proyecto}
-        llamado={llamado}
-        llamadosList={llamadosList}
-        pdrRows={pdrRows}
-        loading={loading}
-        networkOnline={networkOnline}
-        onEnter={() => {
-          if (pdrRows.length > 0 || !loading) {
-            setEntered(true);
-          }
-        }}
-        onSelectLlamado={(lId) => {
-          const selectedLlam = llamadosList.find(l => l.id === lId) || llamado;
-          if (selectedLlam) {
-            setLlamado(selectedLlam);
-          }
-          setConfig(prev => ({ ...prev, selectedLlamadoId: lId }));
-        }}
-      />
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-4 antialiased selection:bg-indigo-500/30 selection:text-indigo-200">
+        <div className="max-w-md w-full bg-slate-900/60 border border-slate-800/80 backdrop-blur-md rounded-3xl p-6 md:p-8 shadow-2xl flex flex-col gap-6 text-center relative overflow-hidden">
+          
+          {loading && (
+            <div className="absolute inset-0 bg-slate-950/45 backdrop-blur-xs flex items-center justify-center z-10 transition">
+              <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+            </div>
+          )}
+
+          {/* Logo Cliente / Titular */}
+          <div className="flex justify-center">
+            <div 
+              style={{ backgroundColor: proyecto?.color_cliente || '#1e1b4b' }}
+              className="w-24 h-24 rounded-2xl flex items-center justify-center p-2.5 border border-slate-800/60 shadow-inner overflow-hidden"
+            >
+              {proyecto?.cliente && (proyecto.cliente.startsWith("http://") || proyecto.cliente.startsWith("https://")) ? (
+                <img
+                  src={proyecto.cliente}
+                  alt="Cliente Logo"
+                  className="w-full h-full object-contain"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span className="text-center text-xs font-black text-white uppercase tracking-wider break-words line-clamp-3">
+                  {proyecto?.cliente || "CLIENTE"}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="border-t border-b border-slate-850/60 py-4 my-1 space-y-1">
+            <h2 className="text-xl font-bold tracking-tight text-white font-sans">
+              {proyecto?.campana || (proyectosList.length === 0 ? "Cargando proyecto..." : "Campaña")}
+            </h2>
+            <p className="text-xs text-indigo-400 font-mono font-medium uppercase tracking-wider">
+              {proyecto?.productora || "Productora"}
+            </p>
+          </div>
+
+          {/* Selectors */}
+          <div className="space-y-4">
+            
+            {/* Called dropdown selection */}
+            <div className="w-full text-left space-y-1.5">
+              <label className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider block font-mono">
+                Seleccionar Llamado:
+              </label>
+              <select
+                value={llamado.id || ""}
+                onChange={(e) => {
+                  const lId = parseInt(e.target.value, 10);
+                  const selectedLlam = llamadosList.find(l => l.id === lId);
+                  if (selectedLlam) {
+                    setLlamado(selectedLlam);
+                    loadCachedOrFetch(lId);
+                  }
+                }}
+                className="bg-slate-950 border border-slate-850/80 text-amber-400 text-sm font-bold rounded-xl px-4 py-3 w-full focus:border-indigo-500 focus:outline-none cursor-pointer font-mono shadow-inner"
+              >
+                {relatedLlamados.length === 0 ? (
+                  <option value="" className="bg-slate-950 text-slate-500 col-span-3">
+                    -- No hay llamados disponibles --
+                  </option>
+                ) : (
+                  relatedLlamados.map((l) => (
+                    <option key={l.id} value={l.id} className="bg-slate-955 text-amber-400">
+                      {l.d_o_d || `Llamado ${l.id}`}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+
+            {/* Summarized called times stats widget */}
+            {llamado.id !== 0 && (
+              <div className="bg-slate-950/40 border border-slate-850/50 rounded-2xl p-4 text-left text-xs space-y-2 font-mono text-slate-400">
+                <div className="flex justify-between border-b border-slate-850/40 pb-1.5">
+                  <span className="text-slate-500">Fecha:</span>
+                  <span className="text-slate-200 font-bold">
+                    {(() => {
+                      if (llamado.fecha) {
+                        const dateStr = llamado.fecha.substring(0, 10);
+                        const parts = dateStr.split('-');
+                        return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dateStr;
+                      }
+                      return "-";
+                    })()}
+                  </span>
+                </div>
+                <div className="flex justify-between border-b border-slate-850/40 pb-1.5">
+                  <span className="text-slate-500">Hora de Llamado:</span>
+                  <span className="text-amber-400 font-bold">{llamado.llamado_hora || "08:00"}</span>
+                </div>
+                <div className="flex justify-between text-[11px] pt-0.5">
+                  <span className="text-slate-500">Comidas:</span>
+                  <span className="text-slate-300">
+                    🥪 {llamado.desayuno || "-"} &nbsp;&bull;&nbsp; 🍲 {llamado.almuerzo || "-"}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Launch layout button */}
+          <div className="pt-2">
+            <button
+              onClick={() => {
+                if (llamado.id !== 0) {
+                  setEntered(true);
+                } else {
+                  alert("Por favor selecciona un llamado válido para ingresar.");
+                }
+              }}
+              className="w-full py-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-450 hover:to-amber-550 active:scale-[0.98] text-slate-950 font-black text-sm rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-amber-950/20 hover:shadow-amber-500/10 transition duration-150 uppercase tracking-widest font-sans cursor-pointer"
+            >
+              <span>Ingresar al Plan</span>
+              <ChevronRight className="w-4 h-4 text-slate-950 shrink-0" />
+            </button>
+          </div>
+
+          <div className="text-[10px] text-slate-650 font-mono text-center">
+            rodajeApp v1.0 (inthependiente)
+          </div>
+        </div>
+      </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col antialiased">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col antialiased relative">
       
-      {/* Dynamic top persistent timing status calculator */}
+      {/* Top sticky status widget banner */}
       <div className={`sticky top-0 z-40 transition-colors backdrop-blur-md border-b flex items-center justify-center px-4 py-3 md:px-6 shadow-xl ${calculatedState.class}`}>
         <div className="flex items-center gap-3 justify-center text-center">
-          <Clock className="w-5 h-5 shrink-0 animate-pulse" />
-          <h1 className="text-sm md:text-base font-black tracking-wide font-mono uppercase">
-            {calculatedState.text}
+          <Clock className="w-5 h-5 shrink-0 text-indigo-300" />
+          <h1 className="text-sm md:text-base font-black tracking-wide font-mono uppercase flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+            <span>{calculatedState.text}</span>
+            {tomaActualText && (
+              <>
+                <span className="opacity-40 hidden sm:inline">|</span>
+                <span className="text-amber-400 bg-slate-950/40 px-2.5 py-0.5 rounded-md border border-amber-500/20 font-extrabold text-xs md:text-sm tracking-normal uppercase">
+                  {tomaActualText}
+                </span>
+              </>
+            )}
           </h1>
+          {loading && <RefreshCw className="w-4 h-4 text-indigo-400 animate-spin shrink-0 ml-1.5" />}
         </div>
       </div>
 
-      {/* Main Core Dashboard Frame */}
       <div className="max-w-7xl w-full mx-auto p-4 md:p-6 flex-1 flex flex-col gap-6">
 
-        {/* Plan Header */}
+        {/* Timeline Frame */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex-1 flex flex-col justify-between">
           <div>
-            <div className="bg-slate-950/60 px-4 py-3 border-b border-slate-850 flex flex-col md:flex-row md:items-center justify-between text-xs text-slate-400 gap-2 md:gap-0">
-              <span className="font-bold tracking-wider uppercase font-mono order-2 md:order-1">PLAN DE RODAJE EN VIVO</span>
-              <div className="flex items-center gap-2 order-1 md:order-2 justify-end w-full md:w-auto">
-                {proyecto?.id && (
-                  <a
-                    href={`https://inthependiente.github.io/storyboardStudio/?id=${proyecto.id}&mode=presenter`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono text-amber-400 hover:text-amber-300 hover:bg-amber-950/20 rounded border border-amber-900/40 transition cursor-pointer"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Ver Storyboards</span>
-                  </a>
-                )}
-                <button
-                  onClick={() => setEntered(false)}
-                  className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono text-indigo-400 hover:text-indigo-300 hover:bg-[#1f1a4a]/40 rounded border border-indigo-900/40 transition cursor-pointer"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                  <span>Volver a Inicio</span>
-                </button>
-                <button
-                  onClick={() => setShowBetaModal(true)}
-                  title="Información beta"
-                  className="flex items-center justify-center w-6 h-6 rounded border border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-850 transition cursor-pointer"
-                  style={{ minWidth: '24px', minHeight: '24px' }}
-                >
-                  <HelpCircle className="w-3.5 h-3.5" />
-                </button>
-              </div>
+            <div className="bg-slate-950/60 px-4 py-3 border-b border-slate-850 flex items-center justify-between text-xs text-slate-400">
+              <span className="font-bold tracking-wider uppercase">PLAN DE RODAJE</span>
+              <button
+                onClick={() => setEntered(false)}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono text-indigo-400 hover:text-indigo-300 hover:bg-[#1f1a4a]/40 rounded border border-indigo-900/40 transition cursor-pointer"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>Volver a Inicio</span>
+              </button>
             </div>
 
-            <DesktopTable
-              memoizedRows={memoizedRows}
-              localCompletedTimes={localCompletedTimes}
-              triggerLightboxOpen={triggerLightboxOpen}
-            />
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left border-collapse table-fixed">
+                <thead>
+                  <tr className="bg-slate-950/30 text-[8px] font-bold text-slate-450 uppercase tracking-widest border-b border-slate-850">
+                    <th className="py-3 px-3 text-center w-[50px]">Status</th>
+                    <th className="py-3 px-2 text-center w-[45px]">Esc/Pl</th>
+                    <th className="py-3 px-3 text-center w-[65px]">Plan</th>
+                    <th className="py-3 px-3 text-center w-[75px] bg-amber-950/10 text-amber-400">Estimada</th>
+                    <th className="py-3 px-4">Descripción y Notas</th>
+                    <th className="py-3 px-3 text-center w-[112px]">Referencias</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pdrRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-16 text-center italic text-sm text-slate-500">
+                        {loading ? "Sincronizando plan..." : "No hay planos cargados para este día."}
+                      </td>
+                    </tr>
+                  ) : (
+                    pdrRows.map((row, index) => {
+                      const planTimes = rawPlanTimings[index] || { plannedStartStr: "08:00", plannedEndStr: "08:15" };
+                      const estTimes = wrapEstTimings[index] || { estimadaStartStr: "08:00", estimadaEndStr: "08:15", originalEstimadaStart: "08:00" };
+                      const firstPhoto = row.shotlist?.referencia_urls && row.shotlist.referencia_urls.trim().length > 6
+                        ? row.shotlist.referencia_urls.split(",")[0].trim()
+                        : null;
 
-            <MobileCards
-              memoizedRows={memoizedRows}
-              localCompletedTimes={localCompletedTimes}
-              triggerLightboxOpen={triggerLightboxOpen}
-            />
+                      const isSpecialRow = row.shotlist?.plano?.toUpperCase() === "ES";
+
+                      return (
+                        <tr
+                          key={row.id}
+                          className={`group align-middle hover:bg-slate-950/60 border-b border-indigo-950/10 transition duration-150 select-none ${
+                            row.terminado ? "bg-slate-950/40 opacity-50" : ""
+                          } ${
+                            isSpecialRow ? "bg-[#18142d] hover:bg-[#201b3d] border-b border-indigo-900/30" : ""
+                          }`}
+                        >
+                          {/* Status Finished read-only marker */}
+                          <td className="py-3 px-3 text-center w-[50px]">
+                            <div
+                              className={`w-9 h-9 rounded-full flex items-center justify-center transition mx-auto border ${
+                                row.terminado
+                                  ? "bg-emerald-950 text-emerald-400 border-emerald-500/60 shadow-lg"
+                                  : "bg-slate-950/20 text-slate-850 border-slate-900/30 opacity-30"
+                              }`}
+                              title={row.terminado ? "Plano Terminado" : "Plano Pendiente"}
+                            >
+                              <CheckCircle className={`w-5 h-5 ${row.terminado ? "fill-emerald-400/20" : ""}`} />
+                            </div>
+                            {row.terminado && (
+                              <div className="mt-1 flex flex-col items-center">
+                                <span className="text-[10px] font-bold font-mono tracking-tighter text-emerald-400 block leading-none text-center">
+                                  {localCompletedTimes[row.id] || planTimes.plannedEndStr}
+                                </span>
+                              </div>
+                            )}
+                          </td>
+
+                          {isSpecialRow ? (
+                            <td colSpan={5} className="py-4 px-6 text-center">
+                              <div className="font-extrabold text-sm text-slate-200 uppercase tracking-wider py-1 max-w-xl mx-auto drop-shadow-sm leading-relaxed">
+                                {row.shotlist?.descripcion || "FILA ESPECIAL"}
+                              </div>
+                              {row.shotlist?.notas && (
+                                <div className="text-[10px] text-indigo-400 font-mono mt-1 font-medium italic">
+                                  NOTAS: {row.shotlist.notas}
+                                </div>
+                              )}
+                            </td>
+                          ) : (
+                            <>
+                              {/* Esc / Plano */}
+                              <td className="py-3 px-2 text-center w-[45px]">
+                                <div className="flex flex-col gap-0.5 items-center">
+                                  <span className="text-[9px] text-[#94a3b8] font-mono font-bold leading-none">ESC</span>
+                                  <span className="text-[14px] font-bold font-mono text-slate-200">{row.shotlist?.esc || "-"}</span>
+                                  <span className="text-[9px] text-[#94a3b8] font-mono font-bold leading-none mt-1">PL</span>
+                                  <span className="text-[14px] font-bold font-mono text-indigo-400">{row.shotlist?.plano || "-"}</span>
+                                </div>
+                              </td>
+
+                              {/* Planned time */}
+                              <td className="py-3 px-3 text-center font-mono w-[65px]">
+                                <div className="flex flex-col items-center justify-center gap-0.5">
+                                  <span className="text-[14px] font-semibold text-slate-100">{planTimes.plannedStartStr}</span>
+                                  <span className="text-[8px] text-slate-500 leading-none">&bull;</span>
+                                  <span className="text-[14px] font-bold text-slate-400">{planTimes.plannedEndStr}</span>
+                                </div>
+                              </td>
+
+                              {/* Estimated time */}
+                              <td className="py-3 px-3 text-center font-mono bg-amber-955 text-amber-300 w-[75px]">
+                                <span className="text-[10px] font-semibold text-amber-500/80 block leading-none mb-1">INICIA</span>
+                                <div className="font-black text-[16px] text-amber-450 leading-tight">{estTimes.estimadaStartStr}</div>
+                                <span className="text-[10px] text-slate-500 block mt-1">{estTimes.estimadaEndStr}</span>
+                              </td>
+
+                              {/* Description & NOTES */}
+                              <td className="py-3 px-4 text-xs">
+                                <div className="flex items-start gap-1">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-slate-200 font-medium text-sm leading-relaxed break-words text-justify">
+                                      {row.shotlist?.descripcion || <span className="italic text-slate-600">Sin descripción</span>}
+                                    </p>
+                                    {row.shotlist?.notas ? (
+                                      <div className="flex items-center gap-1.5 mt-1.5 text-[11px]">
+                                        <span className="text-indigo-400 font-black tracking-wider shrink-0 uppercase text-[10px]">NOTAS:</span>
+                                        <span className="text-slate-400 font-mono break-words">{row.shotlist.notas}</span>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* References Lightbox zoom thumbnails */}
+                              <td className="py-3 px-3 text-center w-[112px]">
+                                {firstPhoto ? (
+                                  <div 
+                                    className="relative group/photo inline-block cursor-zoom-in font-sans"
+                                    onClick={(e) => { e.stopPropagation(); triggerLightboxOpen(row); }}
+                                  >
+                                    <img
+                                      src={firstPhoto}
+                                      alt="Reference"
+                                      className="w-[100px] h-[55px] object-cover rounded-lg border border-slate-750 group-hover/photo:border-amber-400 transition animate-fade-in"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                    <div className="absolute inset-0 bg-black/45 rounded-lg opacity-0 group-hover/photo:opacity-100 flex items-center justify-center transition">
+                                      <Eye className="w-4 h-4 text-white" />
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-slate-600 select-none italic font-mono">-</span>
+                                )}
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Stack Cards Layout */}
+            <div className="block md:hidden divide-y divide-slate-850">
+              {pdrRows.length === 0 ? (
+                <div className="py-16 text-center italic text-sm text-slate-500">
+                  {loading ? "Sincronizando plan..." : "No hay planos cargados para este día."}
+                </div>
+              ) : (
+                pdrRows.map((row, index) => {
+                  const planTimes = rawPlanTimings[index] || { plannedStartStr: "08:00", plannedEndStr: "08:15" };
+                  const estTimes = wrapEstTimings[index] || { estimadaStartStr: "08:00", estimadaEndStr: "08:15", originalEstimadaStart: "08:05" };
+                  const firstPhoto = row.shotlist?.referencia_urls && row.shotlist.referencia_urls.trim().length > 6
+                    ? row.shotlist.referencia_urls.split(",")[0].trim()
+                    : null;
+
+                  const isSpecialRow = row.shotlist?.plano?.toUpperCase() === "ES";
+
+                  if (isSpecialRow) {
+                    return (
+                      <div
+                        key={row.id}
+                        className={`p-4 bg-[#18142d] border-b border-slate-850 select-none ${
+                          row.terminado ? "opacity-50" : ""
+                        }`}
+                      >
+                        <div className="font-extrabold text-sm text-slate-200 uppercase tracking-wider text-center leading-relaxed font-sans">
+                          {row.shotlist?.descripcion || "FILA ESPECIAL"}
+                        </div>
+                        {row.shotlist?.notas && (
+                          <div className="text-[10px] text-indigo-400 font-mono mt-1 font-medium italic text-center">
+                            NOTAS: {row.shotlist.notas}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={row.id}
+                      className={`p-4 transition duration-150 select-none flex flex-col gap-3 ${
+                        row.terminado ? "bg-slate-950/20 opacity-60" : "bg-slate-900/10"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="bg-slate-950 text-[10px] font-bold font-mono px-2 py-1 rounded border border-slate-800 text-slate-400">
+                            ESC <span className="text-slate-100 font-extrabold text-xs">{row.shotlist?.esc || "-"}</span>
+                          </span>
+                          <span className="bg-indigo-950/60 text-[10px] font-bold font-mono px-2 py-1 rounded border border-indigo-900/40 text-indigo-300">
+                            PLANO <span className="text-indigo-400 font-extrabold text-xs">{row.shotlist?.plano || "-"}</span>
+                          </span>
+                        </div>
+
+                        <div>
+                          {row.terminado ? (
+                            <div className="flex items-center gap-1 bg-emerald-950/80 border border-emerald-500/30 px-2 py-0.5 rounded text-[10px] font-mono text-emerald-400">
+                              <CheckCircle className="w-3.5 h-3.5 fill-emerald-400/10 shrink-0" />
+                              <span>FIN @ {localCompletedTimes[row.id] || planTimes.plannedEndStr}</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 bg-slate-950/60 border border-slate-800/80 px-2 py-0.5 rounded text-[10px] font-mono text-slate-500">
+                              <span className="w-1.5 h-1.5 rounded-full bg-slate-600 animate-pulse shrink-0"></span>
+                              <span>PENDIENTE</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 bg-slate-950/30 border border-slate-850/55 rounded-xl p-2.5 text-xs font-mono">
+                        <div className="flex flex-col items-center justify-center border-r border-slate-850/60 py-0.5">
+                          <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-0.5 text-center">PLANIFICADO</span>
+                          <div className="flex items-center gap-1 text-[13px] font-semibold text-slate-200">
+                            <span>{planTimes.plannedStartStr}</span>
+                            <span className="text-[10px] text-slate-500">&bull;</span>
+                            <span className="text-slate-400">{planTimes.plannedEndStr}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-center justify-center py-0.5 text-amber-300 bg-amber-955 rounded-lg">
+                          <span className="text-[9px] text-amber-500 font-bold uppercase tracking-wider mb-0.5 text-center">ESTIMADO</span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[14px] font-black text-amber-450">{estTimes.estimadaStartStr}</span>
+                            <span className="text-[10px] text-amber-600/60">&bull;</span>
+                            <span className="text-[11px] text-slate-500">{estTimes.estimadaEndStr}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-4">
+                        <div className="flex-1 min-w-0 font-sans">
+                          <p className="text-slate-200 font-medium text-[13px] leading-relaxed break-words text-justify">
+                            {row.shotlist?.descripcion || <span className="italic text-slate-600">Sin descripción</span>}
+                          </p>
+                          {row.shotlist?.notas || row.shotlist?.notas ? (
+                            <div className="flex items-start gap-1.5 mt-2 text-[11px]">
+                              <span className="text-indigo-300 font-black tracking-wider shrink-0 uppercase text-[9px] mt-0.5 font-mono">NOTAS:</span>
+                              <span className="text-slate-400 font-mono break-words leading-relaxed">{row.shotlist.notas || row.shotlist.notas}</span>
+                            </div>
+                          ) : null}
+                        </div>
+
+                        {firstPhoto && (
+                          <div
+                            className="shrink-0 relative cursor-pointer"
+                            onClick={(e) => { e.stopPropagation(); triggerLightboxOpen(row); }}
+                          >
+                            <img
+                              src={firstPhoto}
+                              alt="Ref"
+                              className="w-14 h-14 object-cover rounded-lg border border-slate-800"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center">
+                              <Eye className="w-3.5 h-3.5 text-white" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
 
           <div className="bg-slate-950/20 px-4 py-3 border-t border-slate-850 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-6 text-[11px] text-slate-500 font-mono">
@@ -649,60 +968,68 @@ export default function App() {
         </div>
       </div>
 
-      <LightboxGallery
-        activeRefImage={activeRefImage}
-        setActiveRefImage={setActiveRefImage}
-        imageGallery={imageGallery}
-        galleryIndex={galleryIndex}
-        setGalleryIndex={setGalleryIndex}
-        pdrRows={pdrRows}
-        handlePrevGalleryImage={handlePrevGalleryImage}
-        handleNextGalleryImage={handleNextGalleryImage}
-      />
+      {/* Lightbox full gallery modal */}
+      {activeRefImage && (
+        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4 backdrop-blur-md">
+          <button
+            onClick={() => setActiveRefImage(null)}
+            className="absolute top-4 right-4 p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-full transition cursor-pointer"
+          >
+            <X className="w-6 h-6" />
+          </button>
 
-      {showBetaModal && (
-        <div id="beta-info-modal" className="fixed inset-0 bg-slate-950/85 z-55 flex items-center justify-center p-4 backdrop-blur-md animate-fade-in">
-          <div className="max-w-md w-full bg-slate-905 border border-slate-800 rounded-2xl p-6 shadow-2xl relative">
-            <button
-              id="close-beta-modal-btn"
-              onClick={() => setShowBetaModal(false)}
-              className="absolute top-4 right-4 p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-full transition cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-            <div className="flex items-center gap-2 mb-4 text-[#fbbf24]">
-              <HelpCircle className="w-5 h-5 shrink-0" />
-              <h3 className="text-sm font-black tracking-tight font-mono uppercase">INFORMACIÓN BETA</h3>
-            </div>
-            
-            <div className="text-xs text-slate-300 font-sans space-y-3 leading-relaxed">
-              <p>
-                La aplicación que estás viendo, está en desarrollo y se encuentra en etapa beta por lo que puede contener errores o fallas.
-              </p>
-              <p>
-                El estado actual del rodaje y los tiempos estimados de inicio y fin de planos dependen de una conexión a base de datos y se actualizarán dinámicamente siempre que una fila sea marque como completada por el AD y este tenga conexión a internet.
-              </p>
-              <p className="pt-3 border-t border-slate-800/80 text-slate-400">
-                Si tienes alguna sugerencia o has detectado algún error en el funcionamiento de la app puedes enviarla al correo{" "}
-                <a href="mailto:arauco@gmail.com" className="text-amber-400 hover:text-amber-300 hover:underline font-mono">
-                  arauco@gmail.com
-                </a>
-              </p>
-            </div>
-            
-            <div className="mt-5 flex justify-end">
+          <div className="max-w-4xl w-full flex flex-col items-center">
+            <div className="relative w-full max-h-[70vh] flex justify-center items-center overflow-hidden bg-slate-950 rounded-2xl border border-slate-800">
+              <img
+                src={activeRefImage}
+                alt="Reference"
+                className="max-h-full max-w-full object-contain"
+                referrerPolicy="no-referrer"
+              />
+
               <button
-                id="close-beta-modal-footer-btn"
-                onClick={() => setShowBetaModal(false)}
-                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-mono rounded border border-slate-700 transition cursor-pointer hover:text-white"
+                onClick={handlePrevGalleryImage}
+                className="absolute left-3 p-3 bg-slate-900/80 hover:bg-indigo-600 rounded-full text-white backdrop-blur-sm transition border border-slate-800 cursor-pointer"
               >
-                Entendido
+                <ChevronLeft className="w-6 h-6" />
               </button>
+
+              <button
+                onClick={handleNextGalleryImage}
+                className="absolute right-3 p-3 bg-slate-900/80 hover:bg-indigo-600 rounded-full text-white backdrop-blur-sm transition border border-slate-800 cursor-pointer"
+              >
+                <ChevronRight className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="text-center mt-4 text-slate-300">
+              <p className="text-sm font-bold font-mono tracking-wider text-emerald-400">
+                REFERENCIA {galleryIndex + 1} DE {imageGallery.length}
+              </p>
+              <p className="text-xs text-slate-450 mt-1 max-w-xl mx-auto font-sans">
+                {pdrRows.find((r) => r.shotlist?.referencia_urls?.includes(activeRefImage))?.shotlist?.descripcion || "Referencia visual del Plan de Rodaje"}
+              </p>
+
+              <div className="flex justify-center gap-1.5 mt-3 overflow-x-auto max-w-lg p-1">
+                {imageGallery.map((img, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      setGalleryIndex(i);
+                      setActiveRefImage(img);
+                    }}
+                    className={`w-10 h-10 rounded border-2 overflow-hidden transition-all shrink-0 cursor-pointer ${
+                      galleryIndex === i ? "border-emerald-400 scale-105" : "border-slate-800 opacity-60 hover:opacity-100"
+                    }`}
+                  >
+                    <img src={img} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }
