@@ -923,10 +923,10 @@ export default function App() {
                           <p className="text-slate-200 font-medium text-[13px] leading-relaxed break-words text-justify">
                             {row.shotlist?.descripcion || <span className="italic text-slate-600">Sin descripción</span>}
                           </p>
-                          {row.shotlist?.notes || row.shotlist?.notas ? (
+                          {row.shotlist?.notas || row.shotlist?.notas ? (
                             <div className="flex items-start gap-1.5 mt-2 text-[11px]">
                               <span className="text-indigo-300 font-black tracking-wider shrink-0 uppercase text-[9px] mt-0.5 font-mono">NOTAS:</span>
-                              <span className="text-slate-400 font-mono break-words leading-relaxed">{row.shotlist.notas || row.shotlist.notes}</span>
+                              <span className="text-slate-400 font-mono break-words leading-relaxed">{row.shotlist.notas || row.shotlist.notas}</span>
                             </div>
                           ) : null}
                         </div>
